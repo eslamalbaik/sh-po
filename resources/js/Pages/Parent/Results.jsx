@@ -1,0 +1,302 @@
+import React, { useState, useEffect } from 'react';
+import { Head, router } from '@inertiajs/react';
+
+export default function Results({ student, results }) {
+    const [seconds, setSeconds] = useState(1800); // 30 minutes
+    const [lang, setLang] = useState('ar');
+    const [selectedSubj, setSelectedSubj] = useState(null);
+
+    const isAr = lang === 'ar';
+
+    useEffect(() => {
+        // Persistent timer logic
+        const sessionKey = 'parent_session_end';
+        let endTime = sessionStorage.getItem(sessionKey);
+        
+        if (!endTime) {
+            endTime = Date.now() + 30 * 60 * 1000;
+            sessionStorage.setItem(sessionKey, endTime);
+        }
+
+        const tick = () => {
+            const now = Date.now();
+            const remain = Math.max(0, Math.floor((endTime - now) / 1000));
+            setSeconds(remain);
+            if (remain <= 0) {
+                clearInterval(timer);
+                logout();
+            }
+        };
+
+        const timer = setInterval(tick, 1000);
+        tick();
+        return () => clearInterval(timer);
+    }, []);
+
+    const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m}:${s < 10 ? '0' + s : s}`;
+    };
+
+    const getInitials = (name) => {
+        if (!name) return 'S';
+        const parts = name.split(' ');
+        const first = parts[0];
+        return first.length >= 2 ? first.substring(0, 2) : first;
+    };
+
+    const SUBJECT_ICONS = {
+        'الرياضيات': '➗', 'Mathematics': '➗',
+        'العلوم': '🔬', 'Science': '🔬', 'علوم عامة': '🔬',
+        'اللغة العربية': '📖', 'Arabic Language': '📖',
+        'اللغة الانجليزية': '🌐', 'English Language': '🌐',
+        'التربية الإسلامية': '🕌', 'Islamic Education': '🕌',
+        'الدراسات الاجتماعية': '🌍', 'Social Studies': '🌍',
+        'التربية البدنية': '⚽', 'Physical Education': '⚽',
+        'الفيزياء': '⚡', 'Physics': '⚡',
+        'الكيمياء': '🧪', 'Chemistry': '🧪',
+        'الأحياء': '🧬', 'Biology': '🧬',
+        'الحاسوب': '💻', 'Computer Science': '💻',
+        'الفنون': '🎨', 'Art': '🎨',
+    };
+
+    const getIcon = (ar, en) => SUBJECT_ICONS[ar] || SUBJECT_ICONS[en] || '📚';
+    const gbg = (p) => p >= 85 ? 'fill-g' : p >= 70 ? 'fill-b' : p >= 50 ? 'fill-a' : 'fill-r';
+    const gpill = (p) => p >= 85 ? 'pill-g' : p >= 70 ? 'pill-b' : p >= 50 ? 'pill-a' : 'pill-r';
+
+    // المجموعة حسب المادة
+    const bySubj = {};
+    results.forEach(r => {
+        const key = r.subject_ar;
+        if (!bySubj[key]) bySubj[key] = {
+            nameAr: r.subject_ar,
+            nameEn: r.subject_en,
+            teacherAr: r.teacher_ar,
+            teacherEn: r.teacher_en,
+            evals: []
+        };
+        bySubj[key].evals.push(r);
+    });
+    const subjects = Object.values(bySubj);
+
+    // حساب الإحصائيات
+    const subjStats = subjects.map(s => {
+        const entered = s.evals.filter(e => e.score !== null && e.score !== undefined && !e.is_absent);
+        const tot = Math.round(entered.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) * 10) / 10;
+        const full = entered.reduce((sum, e) => sum + (parseFloat(e.full_mark) || 20), 0);
+        const pct = full > 0 ? Math.round((tot / full) * 100) : 0;
+        return { tot, full, pct, hasScores: entered.length > 0, count: entered.length };
+    });
+
+    const totalScore = subjStats.reduce((a, b) => a + b.tot, 0);
+    const totalFull = subjStats.reduce((a, b) => a + b.full, 0);
+    const overallAvg = totalFull > 0 ? Math.round((totalScore / totalFull) * 100) : 0;
+
+    const logout = () => router.post(route('parent.logout'));
+
+    if (selectedSubj !== null) {
+        return <Detail 
+            subject={subjects[selectedSubj]} 
+            stats={subjStats[selectedSubj]} 
+            lang={lang} 
+            onBack={() => setSelectedSubj(null)} 
+        />;
+    }
+
+    return (
+        <div className="parent-portal-body">
+            <Head title={isAr ? 'نتائج الطالب' : 'Student Results'} />
+            
+            <div className="top-bar" dir={isAr ? 'rtl' : 'ltr'}>
+                {isAr ? (
+                    <>
+                        <div className="top-school">
+                            {isAr ? 'مدرسه مدينه زايد — حلقه ثانيه وثالثه — بنين' : 'Madinat Zayed School — Cycles 2 & 3 — Boys'}
+                        </div>
+                        <div className="top-student">
+                            <div className="top-avatar">{getInitials(isAr ? student.name_ar : student.name_en)}</div>
+                            <div className="top-info">
+                                <div className="top-name">{isAr ? student.name_ar : student.name_en}</div>
+                                <div className="top-class">
+                                    {isAr ? 'الصف ' : 'Grade '}
+                                    {student.grade?.number || ''}
+                                    {isAr ? student.section?.label_ar : student.section?.label_en ? ' — ' + (isAr ? student.section?.label_ar : student.section?.label_en) : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="top-left-group">
+                            <div className="lang-toggle">
+                                <button className={`lt-btn ${lang === 'ar' ? 'on' : ''}`} onClick={() => setLang('ar')}>ع</button>
+                                <button className={`lt-btn ${lang === 'en' ? 'on' : ''}`} onClick={() => setLang('en')}>EN</button>
+                            </div>
+                            <div className="timer-badge">
+                                {isAr ? 'الجلسه: ' : 'Session: '}{formatTime(seconds)}
+                            </div>
+                            <button className="logout-btn" onClick={logout}>{isAr ? 'خروج' : 'Exit'}</button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="top-left-group">
+                            <div className="lang-toggle">
+                                <button className={`lt-btn ${lang === 'ar' ? 'on' : ''}`} onClick={() => setLang('ar')}>ع</button>
+                                <button className={`lt-btn ${lang === 'en' ? 'on' : ''}`} onClick={() => setLang('en')}>EN</button>
+                            </div>
+                            <div className="timer-badge">
+                                {isAr ? 'الجلسه: ' : 'Session: '}{formatTime(seconds)}
+                            </div>
+                            <button className="logout-btn" onClick={logout}>{isAr ? 'خروج' : 'Exit'}</button>
+                        </div>
+                        <div className="top-student">
+                            <div className="top-avatar">{getInitials(isAr ? student.name_ar : student.name_en)}</div>
+                            <div className="top-info">
+                                <div className="top-name">{isAr ? student.name_ar : student.name_en}</div>
+                                <div className="top-class">
+                                    {isAr ? 'الصف ' : 'Grade '}
+                                    {student.grade?.number || ''}
+                                    {isAr ? student.section?.label_ar : student.section?.label_en ? ' — ' + (isAr ? student.section?.label_ar : student.section?.label_en) : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="top-school">
+                            {isAr ? 'مدرسه مدينه زايد — حلقه ثانيه وثالثه — بنين' : 'Madinat Zayed School — Cycles 2 & 3 — Boys'}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <div className="container" dir={isAr ? 'rtl' : 'ltr'}>
+                <div className="sec-panel">
+                    <div className="sec-row">
+                        <span className="sec-ok">✓</span>
+                        <span>{isAr ? 'بياناتك محمية بالكامل' : 'Your data is fully protected'}</span>
+                    </div>
+                    <div className="sec-row">
+                        <span className="sec-ok">✓</span>
+                        <span>{isAr ? 'لا تُشارك مع أي طرف ثالث' : 'Never shared with third parties'}</span>
+                    </div>
+                    <div className="sec-row">
+                        <span className="sec-ok">✓</span>
+                        <span>{isAr ? 'تسجيل خروج تلقائي بعد انتهاء الجلسة' : 'Automatic logout after session ends'}</span>
+                    </div>
+                </div>
+
+                <div className="ov-grid">
+                    <div className="ov-box">
+                        <div className="ov-val" style={{ color: 'var(--green)' }}>{overallAvg}%</div>
+                        <div className="ov-lbl">{isAr ? 'متوسط' : 'Average'}</div>
+                    </div>
+                    <div className="ov-box">
+                        <div className="ov-val">{subjects.length}</div>
+                        <div className="ov-lbl">{isAr ? 'المواد' : 'Subjects'}</div>
+                    </div>
+                    <div className="ov-box">
+                        <div className="ov-val">{results.filter(r => r.score !== null).length}</div>
+                        <div className="ov-lbl">{isAr ? 'التقييمات' : 'Assessments'}</div>
+                    </div>
+                </div>
+
+                <div className="subj-list">
+                    {subjects.map((s, i) => (
+                        <div key={i} className="subj-card" onClick={() => setSelectedSubj(i)}>
+                            <div className="subj-top">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div className="subj-icon">{getIcon(s.nameAr, s.nameEn)}</div>
+                                    <div>
+                                        <div className="subj-name">{isAr ? s.nameAr : s.nameEn}</div>
+                                        <div className="subj-teacher">{isAr ? s.teacherAr : s.teacherEn}</div>
+                                    </div>
+                                </div>
+                                <span className={`score-pill ${gpill(subjStats[i].pct)}`}>{subjStats[i].pct}%</span>
+                            </div>
+                            <div className="bar-track">
+                                <div className={`bar-fill ${gbg(subjStats[i].pct)}`} style={{ width: `${subjStats[i].pct}%` }}></div>
+                            </div>
+                            <div className="subj-footer">
+                                {subjStats[i].count === 0 
+                                    ? <span className="subj-ev-badge">⏳ {isAr ? 'لم تُرصد درجات' : 'No grades'}</span>
+                                    : <span className="subj-ev-badge">{subjStats[i].count} {isAr ? 'تقييمات' : 'assessments'}</span>
+                                }
+                                <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{subjStats[i].tot} / {subjStats[i].full}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function Detail({ subject, stats, lang, onBack }) {
+    const isAr = lang === 'ar';
+    const gbg = (p) => p >= 85 ? 'fill-g' : p >= 70 ? 'fill-b' : p >= 50 ? 'fill-a' : 'fill-r';
+    
+    // الألوان بناءً على النسبة
+    const scoreColor = stats.pct >= 85 ? '#1D9E75' : stats.pct >= 70 ? '#1F4E79' : stats.pct >= 50 ? '#EF9F27' : '#E24B4A';
+    const circleBg = stats.pct >= 85 ? '#EAF3DE' : stats.pct >= 70 ? '#E6F1FB' : stats.pct >= 50 ? '#FFF2CC' : '#FCEBEB';
+    const levelTxt = stats.pct >= 85 ? (isAr ? 'ممتاز' : 'Excellent') : stats.pct >= 70 ? (isAr ? 'جيد جداً' : 'Very Good') : stats.pct >= 50 ? (isAr ? 'مقبول' : 'Acceptable') : (isAr ? 'يحتاج دعم' : 'Needs Support');
+
+    const typeLabels = { exam: { ar: 'امتحان', en: 'Exam' }, task: { ar: 'مهمة', en: 'Task' }, quiz: { ar: 'اختبار قصير', en: 'Quiz' }, project: { ar: 'مشروع', en: 'Project' }, oral: { ar: 'شفهي', en: 'Oral' } };
+
+    return (
+        <div className="parent-portal-body">
+            <div className="container" dir={isAr ? 'rtl' : 'ltr'}>
+                <button className="back-btn" onClick={onBack}>{isAr ? '← العودة' : '← Back'}</button>
+                
+                <div className="prog-header">
+                    <div className="prog-top">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="subj-icon" style={{ width: '46px', height: '46px', fontSize: '22px' }}>📚</div>
+                            <div>
+                                <div className="prog-subj-name">{isAr ? subject.nameAr : subject.nameEn}</div>
+                                <div className="prog-teacher">{isAr ? subject.teacherAr : subject.teacherEn}</div>
+                            </div>
+                        </div>
+                        <div className="prog-pct-circle" style={{ background: circleBg }}>
+                            <div className="prog-pct-num" style={{ color: scoreColor }}>{stats.pct}%</div>
+                            <div className="prog-pct-lbl" style={{ color: scoreColor }}>{levelTxt}</div>
+                        </div>
+                    </div>
+                    <div className="prog-bar-bg">
+                        <div className={`prog-bar-fill ${gbg(stats.pct)}`} style={{ width: `${stats.pct}%` }}></div>
+                    </div>
+                    <div className="prog-stats">
+                        <div className="prog-stat"><div className="prog-stat-val" style={{ color: scoreColor }}>{stats.tot}</div><div className="prog-stat-lbl">{isAr ? 'مجموع الدرجات' : 'Total score'}</div></div>
+                        <div className="prog-stat"><div className="prog-stat-val">{stats.full}</div><div className="prog-stat-lbl">{isAr ? 'الدرجة الكاملة' : 'Full mark'}</div></div>
+                        <div className="prog-stat"><div className="prog-stat-val">{subject.evals.length}</div><div className="prog-stat-lbl">{isAr ? 'عدد التقييمات' : 'Assessments'}</div></div>
+                    </div>
+                </div>
+
+                {subject.evals.map((e, i) => {
+                    const epct = e.full_mark > 0 ? Math.round((e.score / e.full_mark) * 100) : 0;
+                    const eColor = epct >= 85 ? '#1D9E75' : epct >= 70 ? '#1F4E79' : epct >= 50 ? '#EF9F27' : '#E24B4A';
+                    return (
+                        <div key={i} className="eval-card">
+                            <div className="eval-top">
+                                <div>
+                                    <div className="eval-name">{isAr ? e.assessment_ar : e.assessment_en}</div>
+                                    <div className="eval-date">{e.published_at?.split('T')[0] || ''}</div>
+                                </div>
+                                <span className={`type-badge badge-${e.assessment_type || 'exam'}`}>
+                                    {isAr ? typeLabels[e.assessment_type]?.ar : typeLabels[e.assessment_type]?.en}
+                                </span>
+                            </div>
+                            <div className="scores-grid">
+                                <div className="score-col">
+                                    <div className="score-lbl">{isAr ? 'الدرجة' : 'Score'}</div>
+                                    <div><span className="score-num" style={{ color: eColor }}>{e.score}</span><span className="score-den">/{e.full_mark}</span></div>
+                                </div>
+                                <div className="score-div"></div>
+                                <div className="score-col">
+                                    <div className="score-lbl">{isAr ? 'النسبة' : 'Percentage'}</div>
+                                    <div><span className="score-num" style={{ color: eColor }}>{epct}</span><span className="score-den">%</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
