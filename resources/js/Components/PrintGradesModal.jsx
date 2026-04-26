@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import '@/../css/StaffPortal.css'; // Reuse portal styles
 
-export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssignment, students, assessments, grades }) {
+export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssignment, students, assessments, grades, lang = 'ar', t }) {
     if (!isOpen) return null;
 
     const stats = useMemo(() => {
@@ -51,7 +51,7 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
     };
 
     return (
-        <div className="print-modal-overlay">
+        <div className="print-modal-overlay" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
             <style>
                 {`
                 @media screen {
@@ -167,7 +167,7 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
                     background: #f8fafc;
                 }
                 .std-name-cell {
-                    text-align: right !important;
+                    text-align: ${lang === 'ar' ? 'right' : 'left'} !important;
                     font-weight: 700;
                 }
                 .total-cell-print {
@@ -182,59 +182,59 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
             <div className="print-modal-actions no-print">
                 <button className="p-btn btn-indigo" onClick={handlePrint}>
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2H5zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1z"/><path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2V7zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/></svg>
-                    Print
+                    {t.print}
                 </button>
                 <button className="p-btn btn-dark" onClick={onClose}>
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
-                    Close
+                    {t.close}
                 </button>
             </div>
 
-            <div className="print-modal-content" dir="rtl">
+            <div className="print-modal-content">
                 <div className="print-sheet-header">
                     <div className="print-title-area">
-                        <h1 dir="ltr">Grades Sheet — {selectedAssignment?.subject?.name_en || selectedAssignment?.subject?.name_ar}</h1>
+                        <h1>{lang === 'ar' ? 'كشف الدرجات' : 'Grades Sheet'} — {lang === 'ar' ? selectedAssignment?.subject?.name_ar : selectedAssignment?.subject?.name_en || selectedAssignment?.subject?.name_ar}</h1>
                         <div className="print-meta">
-                            Madinat Zayed School | Date: {new Date().toLocaleDateString('en-GB')} | Students: {students.length}
+                            {t.schName} | {lang === 'ar' ? 'التاريخ:' : 'Date:'} {new Date().toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-GB')} | {lang === 'ar' ? 'الطلاب:' : 'Students:'} {students.length}
                         </div>
                     </div>
-                    <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontWeight: 800, fontSize: '18px', color: '#1c4c6e' }}>{staff.name_ar}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{selectedAssignment?.section?.grade?.number}{selectedAssignment?.section?.letter} — الفصل الدراسي الثالث</div>
+                    <div style={{ textAlign: lang === 'ar' ? 'left' : 'right' }}>
+                        <div style={{ fontWeight: 800, fontSize: '18px', color: '#1c4c6e' }}>{lang === 'ar' ? staff.name_ar : staff.name_en || staff.name_ar}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{selectedAssignment?.section?.grade?.number}{selectedAssignment?.section?.letter} — {lang === 'ar' ? 'الفصل الدراسي الثالث' : 'Third Term'}</div>
                     </div>
                 </div>
 
                 <div className="print-kpi-grid">
                     <div className="print-kpi-card">
                         <div className="p-kpi-val">{stats.total}</div>
-                        <div className="p-kpi-lbl">Total Students</div>
+                        <div className="p-kpi-lbl">{lang === 'ar' ? 'إجمالي الطلاب' : 'Total Students'}</div>
                     </div>
                     <div className="print-kpi-card">
                         <div className="p-kpi-val">{stats.entered}</div>
-                        <div className="p-kpi-lbl">Entered</div>
+                        <div className="p-kpi-lbl">{t.entries}</div>
                     </div>
                     <div className="print-kpi-card">
                         <div className="p-kpi-val">{stats.avg}</div>
-                        <div className="p-kpi-lbl">Average</div>
+                        <div className="p-kpi-lbl">{lang === 'ar' ? 'المعدل' : 'Average'}</div>
                     </div>
                     <div className="print-kpi-card">
                         <div className="p-kpi-val">{stats.passed}</div>
-                        <div className="p-kpi-lbl">Passed</div>
+                        <div className="p-kpi-lbl">{lang === 'ar' ? 'الناجحون' : 'Passed'}</div>
                     </div>
                 </div>
 
                 <table className="print-table">
                     <thead>
                         <tr>
-                            <th style={{ width: '30%' }}>Student Name</th>
-                            <th style={{ width: '15%' }}>Student No.</th>
+                            <th style={{ width: '30%' }}>{t.stdName}</th>
+                            <th style={{ width: '15%' }}>{lang === 'ar' ? 'رقم الطالب' : 'Student No.'}</th>
                             {assessments.map(ass => (
                                 <th key={ass.id}>
-                                    <div>{ass.note_ar}</div>
+                                    <div>{lang === 'ar' ? ass.note_ar : ass.note_en || ass.note_ar}</div>
                                     <div style={{ fontSize: '10px', opacity: 0.8 }}>{ass.full_mark}</div>
                                 </th>
                             ))}
-                            <th style={{ width: '10%' }}>Total</th>
+                            <th style={{ width: '10%' }}>{t.total}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -242,7 +242,7 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
                             let rowTotal = 0;
                             return (
                                 <tr key={std.id}>
-                                    <td className="std-name-cell">{idx + 1}. {std.name_ar}</td>
+                                    <td className="std-name-cell">{idx + 1}. {lang === 'ar' ? std.name_ar : std.name_en || std.name_ar}</td>
                                     <td>{std.student_no}</td>
                                     {assessments.map(ass => {
                                         const score = grades[`${std.id}_${ass.id}`];
@@ -251,7 +251,7 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
                                         
                                         return (
                                             <td key={ass.id} className={score === undefined || score === null || score === '' ? 'score-nan' : 'score-val'}>
-                                                {score === undefined || score === null || score === '' ? 'NaN' : (numScore === 0 ? 'A' : numScore)}
+                                                {score === undefined || score === null || score === '' ? '—' : (numScore === 0 ? 'A' : numScore)}
                                             </td>
                                         );
                                     })}
@@ -267,3 +267,4 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
         </div>
     );
 }
+

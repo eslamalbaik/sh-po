@@ -40,13 +40,27 @@ class AdminPortalController extends Controller
                     'name_en'       => $staff->name_en,
                     'is_staff'      => $staff->staff_no,
                     'completion'    => $this->getStaffPerformance($staff->id),
-                    'assignments'   => $staff->assignments->map(function($a) {
+                    'assignments'   => $staff->assignments->map(function($a) use ($staff) {
+                        $actualCount = \App\Models\Assessment::where([
+                            'staff_id'   => $staff->id,
+                            'section_id' => $a->section_id,
+                            'subject_id' => $a->subject_id
+                        ])->count();
+                        
+                        $expected = $a->expected_assessments ?? 5;
+                        $pct = $expected > 0 ? round(($actualCount / $expected) * 100) : 0;
+
                         return [
                             'section_id' => $a->section_id,
                             'subject_id' => $a->subject_id,
-                            'label' => ($a->section->grade->number ?? '') . ($a->section->letter ?? '') . ' - ' . ($a->subject->name_ar ?? ''),
-                            'has_data' => $this->checkAssignmentData($a->section_id, $a->subject_id)
+                            'section_name' => ($a->section->grade->number ?? '') . ($a->section->letter ?? ''),
+                            'label_ar' => ($a->subject->name_ar ?? ''),
+                            'label_en' => ($a->subject->name_en ?? $a->subject->name_ar ?? ''),
+                            'completion_ratio' => "{$actualCount}/{$expected}",
+                            'completion_pct' => "({$pct}%)",
+                            'has_data' => $actualCount > 0
                         ];
+
                     })
                 ];
             });
@@ -226,17 +240,137 @@ class AdminPortalController extends Controller
         return response()->json($assignments);
     }
 
+    public function storeStaff(Request $request)
+    {
+        $request->validate([
+            'name_ar' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'staff_no' => 'required|string|unique:staff,staff_no',
+            'password' => 'required|string|min:4',
+        ]);
+
+        return DB::transaction(function() use ($request) {
+            $user = User::create([
+                'name' => $request->name_ar,
+                'email' => $request->staff_no . '@school.com', // Placeholder email
+                'password' => Hash::make($request->password),
+                'role' => 'teacher',
+                'login_id' => $request->staff_no,
+            ]);
+
+            Staff::create([
+                'id' => (string) Str::uuid(),
+                'user_id' => $user->id,
+                'name_ar' => $request->name_ar,
+                'name_en' => $request->name_en,
+                'staff_no' => $request->staff_no,
+                'is_active' => true,
+            ]);
+
+            return back();
+        });
+    }
+
+    public function updateStaff(Request $request, $id)
+    {
+        $staff = Staff::findOrFail($id);
+        $user = User::findOrFail($staff->user_id);
+
+        $request->validate([
+            'name_ar' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+            'staff_no' => 'required|string|unique:staff,staff_no,' . $staff->id,
+            'password' => 'nullable|string|min:4',
+        ]);
+
+        return DB::transaction(function() use ($request, $staff, $user) {
+            $staff->update([
+                'name_ar' => $request->name_ar,
+                'name_en' => $request->name_en,
+                'staff_no' => $request->staff_no,
+            ]);
+
+            $userData = [
+                'name' => $request->name_ar,
+                'email' => $request->staff_no . '@school.com',
+                'login_id' => $request->staff_no,
+            ];
+
+            if ($request->password) {
+                $userData['password'] = Hash::make($request->password);
+            }
+
+            $user->update($userData);
+
+            return back();
+        });
+    }
+
+
+    public function deleteStaff($id)
+    {
+        $staff = Staff::findOrFail($id);
+        $user = User::find($staff->user_id);
+
+        return DB::transaction(function() use ($staff, $user) {
+            $staff->delete();
+            if ($user) {
+                $user->delete();
+            }
+            return back();
+        });
+    }
+
+    public function storeSubject(Request $request)
+    {
+        $request->validate([
+            'name_ar' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+        ]);
+
+        Subject::create([
+            'name_ar' => $request->name_ar,
+            'name_en' => $request->name_en,
+        ]);
+
+        return back();
+    }
+
+    public function updateSubject(Request $request, $id)
+    {
+        $request->validate([
+            'name_ar' => 'required|string|max:255',
+            'name_en' => 'nullable|string|max:255',
+        ]);
+
+        $subject = Subject::findOrFail($id);
+        $subject->update([
+            'name_ar' => $request->name_ar,
+            'name_en' => $request->name_en,
+        ]);
+
+        return back();
+    }
+
+    public function deleteSubject($id)
+    {
+        $subject = Subject::findOrFail($id);
+        $subject->delete();
+        return back();
+    }
+
     public function storeAssignment(Request $request)
     {
         $request->validate([
-            'staff_id' => 'required|exists:staff,id',
+            'staff_id'   => 'required|exists:staff,id',
             'section_id' => 'required|exists:sections,id',
             'subject_id' => 'required|exists:subjects,id',
+            'student_ids' => 'nullable|array', // For elective assignments
         ]);
 
         // Prevent duplicates
         $exists = TeacherAssignment::where([
-            'staff_id' => $request->staff_id,
+            'staff_id'   => $request->staff_id,
             'section_id' => $request->section_id,
             'subject_id' => $request->subject_id
         ])->exists();
@@ -245,15 +379,29 @@ class AdminPortalController extends Controller
             return back()->withErrors(['error' => 'هذا التكليف (المادة والصف) مسند بالفعل لهذا المعلم مسبقاً.']);
         }
 
-        TeacherAssignment::create([
-            'staff_id' => $request->staff_id,
-            'section_id' => $request->section_id,
-            'subject_id' => $request->subject_id,
-            'semester_id' => 3,
-            'expected_assessments' => 5,
-        ]);
+        return DB::transaction(function() use ($request) {
+            $assignment = TeacherAssignment::create([
+                'staff_id'   => $request->staff_id,
+                'section_id' => $request->section_id,
+                'subject_id' => $request->subject_id,
+                'semester_id' => 3,
+                'expected_assessments' => 5,
+            ]);
 
-        return back();
+            // If specific students are selected, save them
+            if ($request->has('student_ids') && !empty($request->student_ids)) {
+                foreach ($request->student_ids as $sid) {
+                    DB::table('elective_students')->insert([
+                        'assignment_id' => $assignment->id,
+                        'student_id'    => $sid,
+                        'created_at'    => now(),
+                        'updated_at'    => now(),
+                    ]);
+                }
+            }
+
+            return back();
+        });
     }
 
     public function deleteAssignment($id)
@@ -274,10 +422,28 @@ class AdminPortalController extends Controller
             ->where('subject_id', $subjectId)
             ->get();
 
-        $students = Student::where('section_id', $sectionId)
-            ->where('is_active', true)
-            ->orderBy('name_ar')
-            ->get();
+        $assignment = TeacherAssignment::where([
+            'staff_id'   => $staffId,
+            'section_id' => $sectionId,
+            'subject_id' => $subjectId
+        ])->first();
+
+        $electiveStudentIds = [];
+        if ($assignment) {
+            $electiveStudentIds = DB::table('elective_students')
+                ->where('assignment_id', $assignment->id)
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        $studentQuery = Student::where('section_id', $sectionId)
+            ->where('is_active', true);
+
+        if (!empty($electiveStudentIds)) {
+            $studentQuery->whereIn('id', $electiveStudentIds);
+        }
+
+        $students = $studentQuery->orderBy('name_ar')->get();
 
         $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))->get();
 

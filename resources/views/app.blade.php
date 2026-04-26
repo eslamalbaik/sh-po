@@ -1363,7 +1363,7 @@ html[dir="rtl"] .sitecode-input {
 }
 
 .sitecode-input:focus {
-  border-color: #1c4c6e !important;
+  border-color: #3b82f6 !important;
   box-shadow: 0 0 0 3px rgba(28, 76, 110, 0.1);
   background: #fff !important;
 }
@@ -1405,7 +1405,7 @@ html[dir="rtl"] .eye-toggle { left: 12px; }
 }
 
 .sitecode-btn:hover {
-  background: #153a5c !important;
+  background: #27374D !important;
   transform: translateY(-1px);
 }
 
@@ -1522,7 +1522,7 @@ html[dir="ltr"] .field-input-wrap input { padding-right: 45px; }
 html[dir="rtl"] .field-input-wrap input { padding-left: 45px; }
 
 .field-input-wrap input:focus {
-  border-color: #1c4c6e !important;
+  border-color: #3b82f6 !important;
   box-shadow: 0 0 0 3px rgba(28, 76, 110, 0.1);
 }
 
@@ -1645,6 +1645,78 @@ html[dir="rtl"] .field-eye { left: 12px; }
 .leg-logout-btn:hover {
   background: #ef4444 !important;
   color: #fff !important;
+}
+
+.lang-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 15px;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.lang-dropdown-trigger:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+.lang-dropdown-trigger img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.lang-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    width: 180px;
+    padding: 8px;
+    z-index: 1000;
+    animation: slideDown 0.3s ease-out;
+}
+[dir="rtl"] .lang-dropdown-menu {
+    left: auto;
+    right: 0;
+}
+.lang-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 15px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: #1e293b;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.lang-item:hover {
+    background: #f1f5f9;
+}
+.lang-item.active {
+    background: #f1f5f9;
+    color: #2563eb;
+}
+.lang-item img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+}
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .leg-kpi-container {
@@ -1960,7 +2032,7 @@ html[dir="rtl"] .rm-input-wrap input { padding-right: 14px; padding-left: 40px; 
 html[dir="ltr"] .rm-input-wrap input { padding-left: 14px; padding-right: 40px; }
 
 .rm-input-wrap input:focus {
-  border-color: #1c4c6e !important;
+  border-color: #3b82f6 !important;
 }
 
 .rm-eye {
@@ -2314,9 +2386,8 @@ html[dir="ltr"] .rm-eye { right: 10px; }
 
 /* ── STUDENT MANAGEMENT ── */
 .st-header-actions {
-  background: rgba(255, 255, 255, 0.4) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(10px);
+  background: #fff !important;
+  border: 1px solid #e2e8f0;
 }
 
 .st-filter-select, .st-search-input {
@@ -2331,7 +2402,7 @@ html[dir="ltr"] .rm-eye { right: 10px; }
 }
 
 .st-filter-select:focus, .st-search-input:focus {
-  border-color: #6366f1 !important;
+  border-color: #3b82f6 !important;
   background: #fff !important;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
@@ -2402,8 +2473,7 @@ html[dir="ltr"] .rm-eye { right: 10px; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2482,6 +2552,12 @@ html[dir="ltr"] .rm-eye { right: 10px; }
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
+.f-select:disabled {
+  background: #e2e8f0 !important;
+  color: #64748b !important;
+  cursor: not-allowed;
+}
+
 .btn-add-confirm {
   background: linear-gradient(135deg, #10b981, #059669);
   color: #fff;
@@ -2499,8 +2575,8 @@ html[dir="ltr"] .rm-eye { right: 10px; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.8) !important;
-  backdrop-filter: blur(5px);
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0;
 }
 
 /* ── ASSIGNMENTS STYLING ── */

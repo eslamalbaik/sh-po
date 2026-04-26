@@ -12,9 +12,10 @@ interface Props {
     data: SearchResult[];
     onSelect: (result: SearchResult) => void;
     placeholder?: string;
+    lang?: string;
 }
 
-export default function GlobalSearch({ data, onSelect, placeholder = "بحث عن معلم، مادة، أو شعبة..." }: Props) {
+export default function GlobalSearch({ data, onSelect, placeholder = "بحث عن معلم، مادة، أو شعبة...", lang = 'ar' }: Props) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isOpen, setIsOpen] = useState(false);
@@ -89,16 +90,17 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
     };
 
     const getBadgeLabel = (type: string) => {
-        switch (type) {
-            case 'Teacher': return 'معلم';
-            case 'Subject': return 'مادة';
-            case 'Class': return 'شعبة';
-            default: return type;
-        }
+        const labels: Record<string, Record<string, string>> = {
+            ar: { Teacher: 'معلم', Subject: 'مادة', Class: 'شعبة' },
+            en: { Teacher: 'Teacher', Subject: 'Subject', Class: 'Class' }
+        };
+        return labels[lang]?.[type] || type;
     };
 
+    const noResultsMsg = lang === 'ar' ? `لم يتم العثور على نتائج لـ "${query}"` : `No results found for "${query}"`;
+
     return (
-        <div className="search-container" ref={containerRef} dir="rtl">
+        <div className="search-container" ref={containerRef} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
             <div className="search-input-wrapper">
                 <input
                     type="text"
@@ -140,10 +142,11 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
                             </div>
                         ))
                     ) : (
-                        <div className="search-no-results">لم يتم العثور على نتائج لـ "{query}"</div>
+                        <div className="search-no-results">{noResultsMsg}</div>
                     )}
                 </div>
             )}
         </div>
     );
 }
+

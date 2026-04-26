@@ -9,6 +9,7 @@ interface Props {
     confirmText?: string;
     cancelText?: string;
     type?: 'danger' | 'warning' | 'info' | 'success';
+    lang?: string;
 }
 
 export default function ActionConfirmModal({ 
@@ -17,17 +18,24 @@ export default function ActionConfirmModal({
     message, 
     onConfirm, 
     onCancel, 
-    confirmText = 'تأكيد', 
-    cancelText = 'إلغاء',
-    type = 'warning'
+    confirmText, 
+    cancelText,
+    type = 'warning',
+    lang = 'ar'
 }: Props) {
     if (!isOpen) return null;
+
+    const defaultConfirm = lang === 'ar' ? 'تأكيد' : 'Confirm';
+    const defaultCancel = lang === 'ar' ? 'إلغاء' : 'Cancel';
+    
+    const finalConfirm = confirmText || defaultConfirm;
+    const finalCancel = cancelText || defaultCancel;
 
     const icon = type === 'danger' ? '⚠️' : (type === 'warning' ? '❓' : (type === 'success' ? '✅' : 'ℹ️'));
     const color = type === 'danger' ? '#ef4444' : (type === 'warning' ? '#f59e0b' : (type === 'success' ? '#10b981' : '#3b82f6'));
 
     return (
-        <div className="modal-overlay" dir="rtl">
+        <div className="modal-overlay" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
             <div className="modal-container premium-modal w-[400px] text-center">
                 <div className="p-8">
                     <div className="flex justify-center mb-6">
@@ -48,13 +56,13 @@ export default function ActionConfirmModal({
                             className="flex-1 py-3 px-6 rounded-xl font-bold text-white transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg"
                             style={{ background: color }}
                         >
-                            {confirmText}
+                            {finalConfirm}
                         </button>
                         <button 
                             onClick={onCancel}
                             className="flex-1 py-3 px-6 rounded-xl font-bold text-slate-400 bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-all"
                         >
-                            {cancelText}
+                            {finalCancel}
                         </button>
                     </div>
                 </div>
@@ -62,3 +70,4 @@ export default function ActionConfirmModal({
         </div>
     );
 }
+

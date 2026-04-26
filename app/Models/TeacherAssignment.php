@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class TeacherAssignment extends Model
 {
-    public $incrementing = false;
-    protected $keyType = 'string';
+    public $incrementing = true;
+    protected $keyType = 'int';
 
     protected $fillable = [
         'staff_id',

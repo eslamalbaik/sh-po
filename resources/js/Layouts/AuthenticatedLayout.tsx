@@ -9,13 +9,30 @@ export default function Authenticated({
     header,
     children,
 }: PropsWithChildren<{ header?: ReactNode }>) {
-    const user = usePage().props.auth.user;
+    const { auth, locale } = usePage().props as any;
+    const user = auth.user;
+    const [lang, setLang] = useState(locale || 'ar');
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
 
+    const dict = {
+        ar: {
+            dashboard: 'لوحة التحكم',
+            profile: 'الملف الشخصي',
+            logout: 'تسجيل الخروج',
+        },
+        en: {
+            dashboard: 'Dashboard',
+            profile: 'Profile',
+            logout: 'Log Out',
+        }
+    };
+
+    const t = dict[lang as keyof typeof dict] || dict.ar;
+
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
             <nav className="border-b border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 justify-between">
@@ -26,17 +43,29 @@ export default function Authenticated({
                                 </Link>
                             </div>
 
-                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex gap-4">
                                 <NavLink
                                     href={route('dashboard')}
                                     active={route().current('dashboard')}
                                 >
-                                    Dashboard
+                                    {t.dashboard}
                                 </NavLink>
                             </div>
                         </div>
 
-                        <div className="hidden sm:ms-6 sm:flex sm:items-center">
+                        <div className="hidden sm:ms-6 sm:flex sm:items-center gap-4">
+                            {/* Language Switcher in Nav */}
+                            <div className="flex gap-2 text-xs font-bold">
+                                <button 
+                                    onClick={() => setLang('ar')} 
+                                    className={`px-2 py-1 rounded ${lang === 'ar' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                                >ع</button>
+                                <button 
+                                    onClick={() => setLang('en')} 
+                                    className={`px-2 py-1 rounded ${lang === 'en' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                                >EN</button>
+                            </div>
+
                             <div className="relative ms-3">
                                 <Dropdown>
                                     <Dropdown.Trigger>
@@ -67,14 +96,14 @@ export default function Authenticated({
                                         <Dropdown.Link
                                             href={route('profile.edit')}
                                         >
-                                            Profile
+                                            {t.profile}
                                         </Dropdown.Link>
                                         <Dropdown.Link
                                             href={route('logout')}
                                             method="post"
                                             as="button"
                                         >
-                                            Log Out
+                                            {t.logout}
                                         </Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
@@ -135,7 +164,7 @@ export default function Authenticated({
                             href={route('dashboard')}
                             active={route().current('dashboard')}
                         >
-                            Dashboard
+                            {t.dashboard}
                         </ResponsiveNavLink>
                     </div>
 
@@ -151,14 +180,14 @@ export default function Authenticated({
 
                         <div className="mt-3 space-y-1">
                             <ResponsiveNavLink href={route('profile.edit')}>
-                                Profile
+                                {t.profile}
                             </ResponsiveNavLink>
                             <ResponsiveNavLink
                                 method="post"
                                 href={route('logout')}
                                 as="button"
                             >
-                                Log Out
+                                {t.logout}
                             </ResponsiveNavLink>
                         </div>
                     </div>
@@ -177,3 +206,4 @@ export default function Authenticated({
         </div>
     );
 }
+

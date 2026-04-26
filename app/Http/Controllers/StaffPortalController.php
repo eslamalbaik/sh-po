@@ -12,6 +12,7 @@ use App\Models\TeacherAssignment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class StaffPortalController extends Controller
@@ -26,6 +27,14 @@ class StaffPortalController extends Controller
 
         // جلب المعلم المرتبط بالمستخدم
         $staff = $user->staff;
+        
+        if (!$staff) {
+            return Inertia::render('Staff/Dashboard', [
+                'staff'       => null,
+                'assignments' => [],
+                'error'       => 'لم يتم العثور على سجل الموظف الخاص بك. يرجى مراجعة الإدارة.'
+            ]);
+        }
         
         // جلب التكليفات (الصفوف والمواد المسندة للمعلم)
         $assignments = TeacherAssignment::where('staff_id', $staff->id)
@@ -48,13 +57,34 @@ class StaffPortalController extends Controller
             'subject_id' => 'required',
         ]);
 
-        $students = Student::where('section_id', $request->section_id)
-            ->where('is_active', true)
-            ->orderBy('name_ar')
-            ->get();
+        // Check if this is an elective assignment (has specific students)
+        $staffId = Auth::user()->staff->id;
+        $assignment = TeacherAssignment::where([
+            'staff_id'   => $staffId,
+            'section_id' => $request->section_id,
+            'subject_id' => $request->subject_id
+        ])->first();
+
+        $electiveStudentIds = [];
+        if ($assignment) {
+            $electiveStudentIds = DB::table('elective_students')
+                ->where('assignment_id', $assignment->id)
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        $studentQuery = Student::where('section_id', $request->section_id)
+            ->where('is_active', true);
+
+        if (!empty($electiveStudentIds)) {
+            $studentQuery->whereIn('id', $electiveStudentIds);
+        }
+
+        $students = $studentQuery->orderBy('name_ar')->get();
 
         $assessments = Assessment::where('section_id', $request->section_id)
             ->where('subject_id', $request->subject_id)
+            ->where('staff_id', $staffId) // Only show assessments created by THIS teacher
             ->get();
 
         $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))
@@ -110,15 +140,10 @@ class StaffPortalController extends Controller
             return response()->json(['status' => 'error', 'message' => 'لم يتم العثور على ملف الموظف الخاص بك في النظام. يرجى مراجعة الإدارة.'], 403);
         }
 
-        // Map Arabic types to DB Enum
-        $typeMap = [
-            'امتحان' => 'exam',
-            'مهمة' => 'task',
-            'اختبار قصير' => 'quiz',
-            'مشروع' => 'project',
-            'شفهي' => 'oral',
-        ];
-        $dbType = $typeMap[$request->type] ?? 'exam';
+        // Use direct type if valid, otherwise fallback
+        $allowedTypes = ['exam', 'task', 'quiz', 'project', 'oral', 'formative', 'homework'];
+        $dbType = in_array($request->type, $allowedTypes) ? $request->type : 'exam';
+
 
         Assessment::create([
             'section_id' => $request->section_id,
