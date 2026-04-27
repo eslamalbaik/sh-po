@@ -17,6 +17,24 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
     const [seconds, setSeconds] = useState(1800); // 30m
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: () => {} });
 
+    // Grouping assignments by subject
+    const uniqueSubjects = useMemo(() => {
+        const subjects = [];
+        const seenIds = new Set();
+        assignments.forEach(ass => {
+            if (ass.subject && !seenIds.has(ass.subject.id)) {
+                subjects.push(ass.subject);
+                seenIds.add(ass.subject.id);
+            }
+        });
+        return subjects;
+    }, [assignments]);
+
+    const filteredSections = useMemo(() => {
+        if (!selectedAssignment || !selectedAssignment.subject) return [];
+        return assignments.filter(ass => ass.subject_id === selectedAssignment.subject_id);
+    }, [assignments, selectedAssignment]);
+
 
     
     // Password change states
@@ -29,6 +47,7 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
 
     // Language state
     const [lang, setLang] = useState(localStorage.getItem('staff_lang') || 'ar');
+    const [isLangOpen, setIsLangOpen] = useState(false);
     useEffect(() => {
         localStorage.setItem('staff_lang', lang);
     }, [lang]);
@@ -400,9 +419,78 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                     <button onClick={logout} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 15px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>{t.logout}</button>
                     <div style={{ fontSize: '13px', color: '#64748b' }}>{t.session} {formatTime(seconds)}</div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <span onClick={() => setLang('ar')} style={{ cursor: 'pointer', fontWeight: lang === 'ar' ? 'bold' : 'normal', color: lang === 'ar' ? '#1c4c6e' : '#94a3b8' }}>ع</span>
-                        <span onClick={() => setLang('en')} style={{ cursor: 'pointer', fontWeight: lang === 'en' ? 'bold' : 'normal', color: lang === 'en' ? '#1c4c6e' : '#94a3b8' }}>EN</span>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        {/* Premium Language Dropdown */}
+                        <div className="relative" onMouseLeave={() => setIsLangOpen(false)} style={{ position: 'relative' }}>
+                            <button 
+                                onMouseEnter={() => setIsLangOpen(true)}
+                                className="lang-dropdown-trigger"
+                                style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '8px', 
+                                    background: 'rgba(0, 0, 0, 0.05)', 
+                                    border: '1px solid #e2e8f0', 
+                                    padding: '4px 10px', 
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    color: '#1c4c6e',
+                                    fontSize: '13px',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                <img src={lang === 'ar' ? '/uae_flag_circle_1777214736267.png' : '/usa_flag_circle_1777214760165.png'} alt="flag" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
+                                <span>{lang === 'ar' ? 'العربية' : 'English'}</span>
+                                <svg className={`w-4 h-4 transition-transform ${isLangOpen ? 'rotate-180' : ''}`} style={{ width: '12px', height: '12px', transition: 'transform 0.2s', transform: isLangOpen ? 'rotate(180deg)' : 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+
+                            {isLangOpen && (
+                                <div className="lang-dropdown-menu" style={{ 
+                                    position: 'absolute', 
+                                    top: '100%', 
+                                    [lang === 'ar' ? 'right' : 'left']: 0, 
+                                    background: '#fff', 
+                                    borderRadius: '10px', 
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                                    padding: '5px', 
+                                    zIndex: 1000, 
+                                    minWidth: '130px',
+                                    marginTop: '5px',
+                                    border: '1px solid #eee'
+                                }}>
+                                    <button onClick={() => { setLang('ar'); setIsLangOpen(false); }} className={`lang-item ${lang === 'ar' ? 'active' : ''}`} style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '10px', 
+                                        width: '100%', 
+                                        padding: '8px 12px', 
+                                        border: 'none', 
+                                        background: lang === 'ar' ? '#f8fafc' : 'transparent', 
+                                        borderRadius: '6px', 
+                                        cursor: 'pointer',
+                                        textAlign: lang === 'ar' ? 'right' : 'left'
+                                    }}>
+                                        <img src="/uae_flag_circle_1777214736267.png" alt="uae" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                                        <span style={{ fontWeight: lang === 'ar' ? 'bold' : '500', color: '#1e293b' }}>العربية</span>
+                                    </button>
+                                    <button onClick={() => { setLang('en'); setIsLangOpen(false); }} className={`lang-item ${lang === 'en' ? 'active' : ''}`} style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '10px', 
+                                        width: '100%', 
+                                        padding: '8px 12px', 
+                                        border: 'none', 
+                                        background: lang === 'en' ? '#f8fafc' : 'transparent', 
+                                        borderRadius: '6px', 
+                                        cursor: 'pointer',
+                                        textAlign: lang === 'ar' ? 'right' : 'left'
+                                    }}>
+                                        <img src="/usa_flag_circle_1777214760165.png" alt="usa" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                                        <span style={{ fontWeight: lang === 'en' ? 'bold' : '500', color: '#1e293b' }}>English</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -424,19 +512,38 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                     <div className="filters-group">
                         <div className="f-item">
                             <span className="f-label">{t.subject}</span>
-                            <select className="f-select" value={assignments.indexOf(selectedAssignment)} onChange={(e) => {
-                                const idx = e.target.value;
-                                if (assignments[idx]) setSelectedAssignment(assignments[idx]);
-                            }}>
-                                {assignments.map((ass, idx) => (
-                                    <option key={idx} value={idx}>{lang === 'ar' ? ass.subject?.name_ar : ass.subject?.name_en || ass.subject?.name_ar}</option>
+                            <select 
+                                className="f-select" 
+                                value={selectedAssignment?.subject_id || ''} 
+                                onChange={(e) => {
+                                    const subId = parseInt(e.target.value);
+                                    const firstAss = assignments.find(ass => ass.subject_id === subId);
+                                    if (firstAss) setSelectedAssignment(firstAss);
+                                }}
+                            >
+                                {uniqueSubjects.map((sub) => (
+                                    <option key={sub.id} value={sub.id}>
+                                        {lang === 'ar' ? sub.name_ar : sub.name_en || sub.name_ar}
+                                    </option>
                                 ))}
                             </select>
                         </div>
                         <div className="f-item">
                             <span className="f-label">{t.section}</span>
-                            <select className="f-select">
-                                <option>{selectedAssignment?.section?.grade?.number}{selectedAssignment?.section?.letter}</option>
+                            <select 
+                                className="f-select"
+                                value={selectedAssignment?.id || ''}
+                                onChange={(e) => {
+                                    const assId = parseInt(e.target.value);
+                                    const found = assignments.find(ass => ass.id === assId);
+                                    if (found) setSelectedAssignment(found);
+                                }}
+                            >
+                                {filteredSections.map((ass) => (
+                                    <option key={ass.id} value={ass.id}>
+                                        {ass.section?.label_ar || (ass.section?.grade?.number + (ass.section?.letter || ''))}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>

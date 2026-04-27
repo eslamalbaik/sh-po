@@ -40,6 +40,7 @@ Route::middleware(['auth'])->group(function () {
     
     // View Subject Grades
     Route::get('/admin/subject/{staffId}/{sectionId}/{subjectId}', [AdminPortalController::class, 'viewSubjectGrades'])->name('admin.subject-grades');
+    Route::get('/admin/teacher/{id}', [AdminPortalController::class, 'viewTeacherProfile'])->name('admin.teacher-profile');
 
     // Student Management
     Route::post('/admin/students', [AdminPortalController::class, 'storeStudent'])->name('admin.students.store');

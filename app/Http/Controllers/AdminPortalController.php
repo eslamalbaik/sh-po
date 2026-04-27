@@ -53,7 +53,8 @@ class AdminPortalController extends Controller
                         return [
                             'section_id' => $a->section_id,
                             'subject_id' => $a->subject_id,
-                            'section_name' => ($a->section->grade->number ?? '') . ($a->section->letter ?? ''),
+                            'section_name' => $a->section->label_ar ?? (($a->section->grade->number ?? '') . ($a->section->letter ?? '')),
+                            'label' => ($a->subject->name_ar ?? ''),
                             'label_ar' => ($a->subject->name_ar ?? ''),
                             'label_en' => ($a->subject->name_en ?? $a->subject->name_ar ?? ''),
                             'completion_ratio' => "{$actualCount}/{$expected}",
@@ -483,5 +484,82 @@ class AdminPortalController extends Controller
         ]);
 
         return back();
+    }
+
+    public function viewTeacherProfile($id)
+    {
+        $staff = Staff::findOrFail($id);
+        
+        $assignments = TeacherAssignment::where('staff_id', $id)
+            ->with(['section.grade', 'subject'])
+            ->get();
+
+        $reportData = $assignments->map(function($a) use ($id) {
+            $assessments = \App\Models\Assessment::where([
+                'staff_id'   => $id,
+                'section_id' => $a->section_id,
+                'subject_id' => $a->subject_id
+            ])->get();
+
+            $electiveStudentIds = DB::table('elective_students')
+                ->where('assignment_id', $a->id)
+                ->pluck('student_id')
+                ->toArray();
+
+            $studentQuery = Student::where('section_id', $a->section_id)
+                ->where('is_active', true);
+
+            if (!empty($electiveStudentIds)) {
+                $studentQuery->whereIn('id', $electiveStudentIds);
+            }
+
+            $students = $studentQuery->orderBy('name_ar')->get();
+            $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))->get();
+
+            // Calculate Success Rate
+            $totalStudents = $students->count();
+            $passedCount = 0;
+            
+            if ($totalStudents > 0 && $assessments->count() > 0) {
+                foreach ($students as $student) {
+                    $studentTotal = $grades->where('student_id', $student->id)->sum('score');
+                    $fullTotal = $assessments->sum('full_mark');
+                    if ($fullTotal > 0 && ($studentTotal / $fullTotal) >= 0.5) {
+                        $passedCount++;
+                    }
+                }
+            }
+
+            $successRate = $totalStudents > 0 ? round(($passedCount / $totalStudents) * 100) : 0;
+            $avgScore = 0;
+            if ($totalStudents > 0 && $assessments->count() > 0) {
+                $actualSum = $grades->sum('score');
+                $possibleSum = $totalStudents * $assessments->sum('full_mark');
+                $avgScore = $possibleSum > 0 ? round(($actualSum / $possibleSum) * 100) : 0;
+            }
+
+            return [
+                'id' => $a->id,
+                'section_id' => $a->section_id,
+                'subject_id' => $a->subject_id,
+                'section_name' => $a->section->label_ar ?? ($a->section->grade->number . $a->section->letter),
+                'subject_name' => (string)$a->subject->name_ar,
+                'subject_name_ar' => (string)$a->subject->name_ar,
+                'subject_name_en' => !empty($a->subject->name_en) ? (string)$a->subject->name_en : (string)$a->subject->name_ar,
+                'subject' => $a->subject,
+                'assessments' => $assessments,
+                'students' => $students,
+                'grades' => $grades,
+                'success_rate' => $successRate,
+                'avg_score' => $avgScore,
+                'total_students' => $totalStudents,
+                'passed_count' => $passedCount
+            ];
+        });
+
+        return Inertia::render('Admin/TeacherProfile', [
+            'staff' => $staff,
+            'reportData' => $reportData,
+        ]);
     }
 }

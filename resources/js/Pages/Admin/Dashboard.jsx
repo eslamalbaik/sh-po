@@ -29,6 +29,7 @@ export default function Dashboard({
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null, type: 'warning', title: '', message: '', action: null });
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [filterSubject, setFilterSubject] = useState('all');
     const [isLangOpen, setIsLangOpen] = useState(false);
 
     // Language Dictionary
@@ -56,7 +57,7 @@ export default function Dashboard({
             done: "أنجز",
             partial: "جزئي",
             notStarted: "لم يبدأ",
-            lowPerformance: "تحصيل متدني",
+            lowPerformance: "إدخال جزئي",
             numSubjects: "مادة/شعبة مكلف بها",
             reset: "إعادة تعيين 🔑",
             subject: "مادة",
@@ -125,7 +126,7 @@ export default function Dashboard({
             done: "Done",
             partial: "Partial",
             notStarted: "Not Started",
-            lowPerformance: "Low Attainment",
+            lowPerformance: "Partial Entry",
             numSubjects: "subjects/sections assigned",
             reset: "Reset 🔑",
             subject: "Subject",
@@ -256,10 +257,17 @@ export default function Dashboard({
         const matchesSearch = r.name_ar.includes(search) || (r.name_en && r.name_en.toLowerCase().includes(search.toLowerCase()));
         if (!matchesSearch) return false;
         
-        if (filterStatus === 'all') return true;
-        if (filterStatus === 'done') return r.completion >= 100;
-        if (filterStatus === 'partial') return r.completion > 0 && r.completion < 100;
-        if (filterStatus === 'not_started') return r.completion === 0;
+        if (filterStatus !== 'all') {
+            if (filterStatus === 'done' && r.completion < 100) return false;
+            if (filterStatus === 'partial' && (r.completion <= 0 || r.completion >= 100)) return false;
+            if (filterStatus === 'not_started' && r.completion !== 0) return false;
+        }
+
+        if (filterSubject !== 'all') {
+            const hasSubject = (r.assignments || []).some(ass => String(ass.subject_id) === String(filterSubject));
+            if (!hasSubject) return false;
+        }
+
         return true;
     });
 
@@ -611,6 +619,20 @@ export default function Dashboard({
                                 </button>
 
                                 <div className="leg-filters-row">
+                                    <div className="f-select-wrap" style={{ marginRight: '10px' }}>
+                                        <select 
+                                            className="st-filter-select"
+                                            style={{ height: '38px', borderRadius: '20px', padding: '0 15px', border: '1px solid #e2e8f0', fontSize: '13px', fontWeight: '600', color: '#64748b' }}
+                                            value={filterSubject}
+                                            onChange={e => setFilterSubject(e.target.value)}
+                                        >
+                                            <option value="all">{lang === 'ar' ? "كل المواد" : "All Subjects"}</option>
+                                            {all_subjects.map(s => (
+                                                <option key={s.id} value={s.id}>{lang === 'ar' ? s.name_ar : (s.name_en || s.name_ar)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
                                 <label className={`leg-filter-label ${filterStatus === 'all' ? 'active-all' : ''}`}>
                                     <input type="radio" name="fs" checked={filterStatus === 'all'} onChange={() => setFilterStatus('all')} />
                                     <span>{t.all}</span> <span className="f-circle"></span>
@@ -636,7 +658,7 @@ export default function Dashboard({
                                 const numSubj = teacher.assignments ? teacher.assignments.length : 0;
                                 const completion = teacher.completion || 0;
                                 const statusClass = completion >= 100 ? 'done' : (completion > 0 ? 'partial' : 'empty');
-                                const statusText = completion >= 60 ? t.done : (completion > 0 ? t.lowPerformance : t.notStarted);
+                                const statusText = completion >= 100 ? t.done : (completion > 0 ? t.lowPerformance : t.notStarted);
                                 
                                 return (
                                     <div key={teacher.id} id={`teacher-card-${teacher.id}`} className="leg-teacher-card">
@@ -646,7 +668,9 @@ export default function Dashboard({
                                                     {(lang === 'ar' ? teacher.name_ar : (teacher.name_en || teacher.name_ar)).slice(0, 1)}
                                                 </div>
                                                 <div style={{ marginRight: '15px' }}>
-                                                    <div className="ltc-name">{lang === 'ar' ? teacher.name_ar : (teacher.name_en || teacher.name_ar)}</div>
+                                                    <Link href={route('admin.teacher-profile', { id: teacher.id })} className="ltc-name" style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
+                                                        {lang === 'ar' ? teacher.name_ar : (teacher.name_en || teacher.name_ar)}
+                                                    </Link>
                                                     <div className="ltc-meta">{numSubj} {t.numSubjects}</div>
                                                 </div>
                                             </div>
@@ -704,7 +728,7 @@ export default function Dashboard({
                                                     >
                                                         <span className="lsp-icon">👁️</span>
                                                         <span className="lsp-text">
-                                                            {pctStr} <span style={{ fontWeight: 700, margin: '0 4px', color: '#1e293b'}}>{ratStr}</span> {secStr} — {ass.label || ass.subject_id}
+                                                            {pctStr} <span style={{ fontWeight: 700, margin: '0 4px', color: '#1e293b'}}>{ratStr}</span> {secStr} — {ass.label || (lang === 'ar' ? ass.label_ar : ass.label_en) || ass.subject_id}
                                                         </span>
                                                     </Link>
                                                 );

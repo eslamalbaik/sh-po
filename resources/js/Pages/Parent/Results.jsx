@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/react';
 export default function Results({ student, results }) {
     const [seconds, setSeconds] = useState(1800); // 30 minutes
     const [lang, setLang] = useState('ar');
+    const [isLangOpen, setIsLangOpen] = useState(false);
     const [selectedSubj, setSelectedSubj] = useState(null);
 
     const isAr = lang === 'ar';
@@ -126,9 +127,76 @@ export default function Results({ student, results }) {
                             </div>
                         </div>
                         <div className="top-left-group">
-                            <div className="lang-toggle">
-                                <button className={`lt-btn ${lang === 'ar' ? 'on' : ''}`} onClick={() => setLang('ar')}>ع</button>
-                                <button className={`lt-btn ${lang === 'en' ? 'on' : ''}`} onClick={() => setLang('en')}>EN</button>
+                            {/* Premium Language Dropdown */}
+                            <div className="relative" onMouseLeave={() => setIsLangOpen(false)} style={{ position: 'relative' }}>
+                                <button 
+                                    onMouseEnter={() => setIsLangOpen(true)}
+                                    className="lang-dropdown-trigger"
+                                    style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px', 
+                                        background: 'rgba(255, 255, 255, 0.1)', 
+                                        border: '1px solid rgba(255, 255, 255, 0.2)', 
+                                        padding: '4px 10px', 
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        color: '#fff',
+                                        fontSize: '13px',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    <img src={lang === 'ar' ? '/uae_flag_circle_1777214736267.png' : '/usa_flag_circle_1777214760165.png'} alt="flag" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
+                                    <span>{lang === 'ar' ? 'العربية' : 'English'}</span>
+                                    <svg className={`w-4 h-4 transition-transform ${isLangOpen ? 'rotate-180' : ''}`} style={{ width: '12px', height: '12px', transition: 'transform 0.2s', transform: isLangOpen ? 'rotate(180deg)' : 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+
+                                {isLangOpen && (
+                                    <div className="lang-dropdown-menu" style={{ 
+                                        position: 'absolute', 
+                                        top: '100%', 
+                                        [lang === 'ar' ? 'right' : 'left']: 0, 
+                                        background: '#fff', 
+                                        borderRadius: '10px', 
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                                        padding: '5px', 
+                                        zIndex: 1000, 
+                                        minWidth: '130px',
+                                        marginTop: '5px',
+                                        border: '1px solid #eee'
+                                    }}>
+                                        <button onClick={() => { setLang('ar'); setIsLangOpen(false); }} className={`lang-item ${lang === 'ar' ? 'active' : ''}`} style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '10px', 
+                                            width: '100%', 
+                                            padding: '8px 12px', 
+                                            border: 'none', 
+                                            background: lang === 'ar' ? '#f8fafc' : 'transparent', 
+                                            borderRadius: '6px', 
+                                            cursor: 'pointer',
+                                            textAlign: lang === 'ar' ? 'right' : 'left'
+                                        }}>
+                                            <img src="/uae_flag_circle_1777214736267.png" alt="uae" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                                            <span style={{ fontWeight: lang === 'ar' ? 'bold' : '500', color: '#1e293b' }}>العربية</span>
+                                        </button>
+                                        <button onClick={() => { setLang('en'); setIsLangOpen(false); }} className={`lang-item ${lang === 'en' ? 'active' : ''}`} style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '10px', 
+                                            width: '100%', 
+                                            padding: '8px 12px', 
+                                            border: 'none', 
+                                            background: lang === 'en' ? '#f8fafc' : 'transparent', 
+                                            borderRadius: '6px', 
+                                            cursor: 'pointer',
+                                            textAlign: lang === 'ar' ? 'right' : 'left'
+                                        }}>
+                                            <img src="/usa_flag_circle_1777214760165.png" alt="usa" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                                            <span style={{ fontWeight: lang === 'en' ? 'bold' : '500', color: '#1e293b' }}>English</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="timer-badge">
                                 {isAr ? 'الجلسه: ' : 'Session: '}{formatTime(seconds)}
@@ -139,9 +207,76 @@ export default function Results({ student, results }) {
                 ) : (
                     <>
                         <div className="top-left-group">
-                            <div className="lang-toggle">
-                                <button className={`lt-btn ${lang === 'ar' ? 'on' : ''}`} onClick={() => setLang('ar')}>ع</button>
-                                <button className={`lt-btn ${lang === 'en' ? 'on' : ''}`} onClick={() => setLang('en')}>EN</button>
+                            {/* Premium Language Dropdown */}
+                            <div className="relative" onMouseLeave={() => setIsLangOpen(false)} style={{ position: 'relative' }}>
+                                <button 
+                                    onMouseEnter={() => setIsLangOpen(true)}
+                                    className="lang-dropdown-trigger"
+                                    style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px', 
+                                        background: 'rgba(255, 255, 255, 0.1)', 
+                                        border: '1px solid rgba(255, 255, 255, 0.2)', 
+                                        padding: '4px 10px', 
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        color: '#fff',
+                                        fontSize: '13px',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    <img src={lang === 'ar' ? '/uae_flag_circle_1777214736267.png' : '/usa_flag_circle_1777214760165.png'} alt="flag" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
+                                    <span>{lang === 'ar' ? 'العربية' : 'English'}</span>
+                                    <svg className={`w-4 h-4 transition-transform ${isLangOpen ? 'rotate-180' : ''}`} style={{ width: '12px', height: '12px', transition: 'transform 0.2s', transform: isLangOpen ? 'rotate(180deg)' : 'none' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+
+                                {isLangOpen && (
+                                    <div className="lang-dropdown-menu" style={{ 
+                                        position: 'absolute', 
+                                        top: '100%', 
+                                        [lang === 'ar' ? 'right' : 'left']: 0, 
+                                        background: '#fff', 
+                                        borderRadius: '10px', 
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                                        padding: '5px', 
+                                        zIndex: 1000, 
+                                        minWidth: '130px',
+                                        marginTop: '5px',
+                                        border: '1px solid #eee'
+                                    }}>
+                                        <button onClick={() => { setLang('ar'); setIsLangOpen(false); }} className={`lang-item ${lang === 'ar' ? 'active' : ''}`} style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '10px', 
+                                            width: '100%', 
+                                            padding: '8px 12px', 
+                                            border: 'none', 
+                                            background: lang === 'ar' ? '#f8fafc' : 'transparent', 
+                                            borderRadius: '6px', 
+                                            cursor: 'pointer',
+                                            textAlign: lang === 'ar' ? 'right' : 'left'
+                                        }}>
+                                            <img src="/uae_flag_circle_1777214736267.png" alt="uae" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                                            <span style={{ fontWeight: lang === 'ar' ? 'bold' : '500', color: '#1e293b' }}>العربية</span>
+                                        </button>
+                                        <button onClick={() => { setLang('en'); setIsLangOpen(false); }} className={`lang-item ${lang === 'en' ? 'active' : ''}`} style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '10px', 
+                                            width: '100%', 
+                                            padding: '8px 12px', 
+                                            border: 'none', 
+                                            background: lang === 'en' ? '#f8fafc' : 'transparent', 
+                                            borderRadius: '6px', 
+                                            cursor: 'pointer',
+                                            textAlign: lang === 'ar' ? 'right' : 'left'
+                                        }}>
+                                            <img src="/usa_flag_circle_1777214760165.png" alt="usa" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                                            <span style={{ fontWeight: lang === 'en' ? 'bold' : '500', color: '#1e293b' }}>English</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="timer-badge">
                                 {isAr ? 'الجلسه: ' : 'Session: '}{formatTime(seconds)}
@@ -292,6 +427,9 @@ function Detail({ subject, stats, lang, onBack }) {
                                     <div className="score-lbl">{isAr ? 'النسبة' : 'Percentage'}</div>
                                     <div><span className="score-num" style={{ color: eColor }}>{epct}</span><span className="score-den">%</span></div>
                                 </div>
+                            </div>
+                            <div className="eval-bar">
+                                <div className={`prog-bar-fill ${gbg(epct)}`} style={{ width: `${epct}%` }}></div>
                             </div>
                         </div>
                     );
