@@ -68,7 +68,7 @@ export default function AddStaffModal({ isOpen, onClose, lang = 'ar', staff = nu
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (isEdit) {
+        if (isEdit && staff) {
             put(route('admin.staff.update', staff.id), {
                 onSuccess: () => {
                     onClose();

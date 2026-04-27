@@ -62,12 +62,14 @@ export default function TransferStudentModal({ student, isOpen, onClose, grades,
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(route('admin.students.transfer', student.id), {
-            onSuccess: () => {
-                onClose();
-                reset();
-            },
-        });
+        if (student) {
+            post(route('admin.students.transfer', student.id), {
+                onSuccess: () => {
+                    onClose();
+                    reset();
+                },
+            });
+        }
     };
 
     if (!isOpen || !student) return null;

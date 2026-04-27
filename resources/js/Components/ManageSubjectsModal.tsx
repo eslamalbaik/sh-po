@@ -50,9 +50,11 @@ export default function ManageSubjectsModal({ isOpen, onClose, subjects, lang = 
 
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
-        put(route('admin.subjects.update', editingId), {
-            onSuccess: () => setEditingId(null),
-        });
+        if (editingId) {
+            put(route('admin.subjects.update', editingId), {
+                onSuccess: () => setEditingId(null),
+            });
+        }
     };
 
     const handleDelete = (id: number, name: string) => {
