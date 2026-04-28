@@ -9,12 +9,11 @@ return new class extends Migration {
     {
         Schema::create('grades', function (Blueprint $table) {
             $table->id();
-            $table->unsignedTinyInteger('number'); // 6,7,8,9,10,11,12
+            $table->unsignedTinyInteger('number'); 
             $table->unique('number');
             $table->timestamps();
         });
     }
-
     public function down(): void
     {
         Schema::dropIfExists('grades');

@@ -101,8 +101,8 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                     <div className="grid grid-cols-2 gap-4">
                         <div className="f-field">
                             <label className="f-label">{t.nameAr}</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 className="f-input"
                                 value={data.name_ar}
                                 onChange={e => setData('name_ar', e.target.value)}
@@ -113,8 +113,8 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                         </div>
                         <div className="f-field">
                             <label className="f-label">{t.nameEn}</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 className="f-input"
                                 value={data.name_en}
                                 onChange={e => setData('name_en', e.target.value)}
@@ -125,8 +125,8 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                         </div>
                         <div className="f-field">
                             <label className="f-label">{t.studentNo}</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 className="f-input"
                                 value={data.student_no}
                                 onChange={e => setData('student_no', e.target.value)}
@@ -137,8 +137,8 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                         </div>
                         <div className="f-field">
                             <label className="f-label">{t.idNo}</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 className="f-input"
                                 value={data.student_id_no}
                                 onChange={e => setData('student_id_no', e.target.value)}
@@ -149,7 +149,7 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                         </div>
                         <div className="f-field">
                             <label className="f-label">{t.grade}</label>
-                            <select 
+                            <select
                                 className="f-select"
                                 value={data.grade_id}
                                 onChange={e => setData('grade_id', e.target.value)}
@@ -164,7 +164,7 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                         </div>
                         <div className="f-field">
                             <label className="f-label">{t.section}</label>
-                            <select 
+                            <select
                                 className="f-select"
                                 value={data.section_id}
                                 onChange={e => setData('section_id', e.target.value)}
@@ -180,8 +180,8 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                         </div>
                         <div className="f-field col-span-2">
                             <label className="f-label">{t.parentMobile}</label>
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 className="f-input"
                                 value={data.parent_mobile}
                                 onChange={e => setData('parent_mobile', e.target.value)}
@@ -192,15 +192,15 @@ export default function AddStudentModal({ isOpen, onClose, grades, sections, lan
                     </div>
 
                     <div className="modal-footer mt-6 flex gap-3">
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={processing}
                             className="btn-add-confirm flex-1 font-bold py-3 rounded-lg"
                         >
                             {t.add}
                         </button>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={onClose}
                             className="btn-cancel flex-1 font-bold py-3 rounded-lg border"
                         >

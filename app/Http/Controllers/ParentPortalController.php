@@ -56,13 +56,73 @@ class ParentPortalController extends Controller
 
         $student = Student::with(['grade', 'section'])->findOrFail($studentId);
         
-        $results = StudentResultView::forStudent($studentId)
-            ->orderBy('display_order')
+        // 1. جلب كافة التقييمات المنشورة للشعبة أو المجموعات
+        $assessments = Assessment::where(function($q) use ($student) {
+                $q->where('section_id', $student->section_id)
+                  ->orWhereIn('group_id', $student->groups()->pluck('groups.id'));
+            })
+            ->where('status', 'published')
+            ->whereExists(function($q) {
+                // التأكد من وجود درجة واحدة على الأقل في هذا التقييم لأي طالب
+                $q->select(DB::raw(1))
+                  ->from('student_grades')
+                  ->whereRaw('student_grades.assessment_id = assessments.id');
+            })
+            ->with(['subject', 'staff', 'group'])
             ->get();
+
+        // 2. دمج التقييمات مع درجات هذا الطالب تحديداً
+        $results = $assessments->map(function($a) use ($studentId) {
+            $grade = StudentGrade::where('assessment_id', $a->id)
+                ->where('student_id', $studentId)
+                ->first();
+            
+            return [
+                'assessment_id' => $a->id,
+                'assessment_ar' => $a->note_ar,
+                'assessment_en' => $a->note_en ?? $a->note_ar,
+                'assessment_type' => $a->type,
+                'subject_id' => $a->subject_id,
+                'subject_ar' => $a->subject->name_ar ?? '',
+                'subject_en' => $a->subject->name_en ?? $a->subject->name_ar ?? '',
+                'teacher_ar' => $a->staff->name_ar ?? '',
+                'teacher_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
+                'score' => $grade ? $grade->score : null,
+                'is_absent' => $grade ? $grade->is_absent : false,
+                'full_mark' => $a->full_mark,
+                'published_at' => $a->published_at,
+                'group_id' => $a->group_id,
+                'group_name_ar' => $a->group->name_ar ?? null,
+                'display_order' => $a->id,
+            ];
+        });
+
+        // جلب المجموعات المسجل فيها الطالب (تظهر كمواد حتى لو لا تقييمات بعد)
+        $groups = \App\Models\Group::whereHas('students', function($q) use ($studentId) {
+                $q->where('students.id', $studentId);
+            })
+            ->with(['subject', 'teacher', 'grade'])
+            ->get()
+            ->map(function($g) {
+                return [
+                    'id'              => $g->id,
+                    'type'            => 'group',
+                    'name_ar'         => $g->name_ar,
+                    'name_en'         => $g->name_en ?? $g->name_ar,
+                    'subject_name_ar' => $g->subject->name_ar ?? '',
+                    'subject_name_en' => $g->subject->name_en ?? $g->subject->name_ar ?? '',
+                    'teacher_name_ar' => $g->teacher->name_ar ?? '',
+                    'teacher_name_en' => $g->teacher->name_en ?? $g->teacher->name_ar ?? '',
+                    'grade_name'      => $g->grade->number ?? '',
+                    'students_count'  => 0,
+                    'subject_id'      => $g->subject_id,
+                ];
+            })->values()->all();
 
         return Inertia::render('Parent/Results', [
             'student' => $student,
-            'results' => $results
+            'results' => $results,
+            'groups'  => $groups,
         ]);
     }
 
@@ -79,13 +139,71 @@ class ParentPortalController extends Controller
 
         $student = Student::with(['grade', 'section'])->findOrFail($studentId);
         
-        $results = StudentResultView::forStudent($studentId)
-            ->orderBy('display_order')
+        $assessments = Assessment::where(function($q) use ($student) {
+                $q->where('section_id', $student->section_id)
+                  ->orWhereIn('group_id', $student->groups()->pluck('groups.id'));
+            })
+            ->where('status', 'published')
+            ->whereExists(function($q) {
+                $q->select(DB::raw(1))
+                  ->from('student_grades')
+                  ->whereRaw('student_grades.assessment_id = assessments.id');
+            })
+            ->with(['subject', 'staff', 'group'])
             ->get();
+
+        $results = $assessments->map(function($a) use ($studentId) {
+            $grade = StudentGrade::where('assessment_id', $a->id)
+                ->where('student_id', $studentId)
+                ->first();
+            
+            return [
+                'assessment_id' => $a->id,
+                'assessment_ar' => $a->note_ar,
+                'assessment_en' => $a->note_en ?? $a->note_ar,
+                'assessment_type' => $a->type,
+                'subject_id' => $a->subject_id,
+                'subject_ar' => $a->subject->name_ar ?? '',
+                'subject_en' => $a->subject->name_en ?? $a->subject->name_ar ?? '',
+                'teacher_ar' => $a->staff->name_ar ?? '',
+                'teacher_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
+                'score' => $grade ? $grade->score : null,
+                'is_absent' => $grade ? $grade->is_absent : false,
+                'full_mark' => $a->full_mark,
+                'published_at' => $a->published_at,
+                'group_id' => $a->group_id,
+                'group_name_ar' => $a->group->name_ar ?? null,
+                'display_order' => $a->id,
+            ];
+        });
+
+        // جلب المجموعات المسجل فيها الطالب
+        $groups = \App\Models\Group::whereHas('students', function($q) use ($studentId) {
+                $q->where('students.id', $studentId);
+            })
+            ->with(['subject', 'teacher', 'grade'])
+            ->get()
+            ->map(function($g) {
+                return [
+                    'id'              => $g->id,
+                    'type'            => 'group',
+                    'name_ar'         => $g->name_ar,
+                    'name_en'         => $g->name_en ?? $g->name_ar,
+                    'subject_name_ar' => $g->subject->name_ar ?? '',
+                    'subject_name_en' => $g->subject->name_en ?? $g->subject->name_ar ?? '',
+                    'teacher_name_ar' => $g->teacher->name_ar ?? '',
+                    'teacher_name_en' => $g->teacher->name_en ?? $g->teacher->name_ar ?? '',
+                    'grade_name'      => $g->grade->number ?? '',
+                    'students_count'  => 0,
+                    'subject_id'      => $g->subject_id,
+                ];
+            })->values()->all();
 
         return Inertia::render('Parent/Results', [
             'student' => $student,
-            'results' => $results
+            'results' => $results,
+            'groups'  => $groups,
+            'isAdminView' => true
         ]);
     }
 

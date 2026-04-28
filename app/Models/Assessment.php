@@ -13,11 +13,12 @@ class Assessment extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'section_id', 'staff_id', 'subject_id', 'status', 
+        'section_id', 'group_id', 'staff_id', 'subject_id', 'status', 
         'published_at', 'note_ar', 'note_en', 'type', 'full_mark', 'weight'
     ];
 
     public function section() { return $this->belongsTo(Section::class); }
+    public function group() { return $this->belongsTo(Group::class); }
     public function staff() { return $this->belongsTo(Staff::class); }
     public function subject() { return $this->belongsTo(Subject::class); }
     public function studentGrades() { return $this->hasMany(StudentGrade::class); }

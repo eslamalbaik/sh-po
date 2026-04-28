@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Head, router, useForm, Link } from '@inertiajs/react';
 import GlobalSearch from '@/Components/GlobalSearch';
+import DebouncedSearchInput from '@/Components/DebouncedSearchInput';
 import AddStudentModal from '@/Components/AddStudentModal';
 import AddStaffModal from '@/Components/AddStaffModal';
 import AddSubjectModal from '@/Components/AddSubjectModal';
+import AddGroupModal from '@/Components/AddGroupModal';
 import TransferStudentModal from '@/Components/TransferStudentModal';
 import ActionConfirmModal from '@/Components/ActionConfirmModal';
 import axios from 'axios';
-
-export default function Dashboard({ 
-    stats = {}, 
-    reports = [], 
-    all_grades = [], 
-    all_sections = [], 
-    students_list = [], 
-    all_subjects = [] 
+export default function Dashboard({
+    stats = {},
+    reports = [],
+    all_grades = [],
+    all_sections = [],
+    students_list = [],
+    all_subjects = [],
+    all_groups = [],
+    all_teachers_list = []
 }) {
     const [tab, setTab] = useState('teachers');
     const [students, setStudents] = useState([]);
@@ -45,6 +48,7 @@ export default function Dashboard({
             teachers: "المعلمون",
             students: "الطلاب",
             assignments: "التكليفات",
+            groups: "المجموعات",
             changePass: "تغيير كلمة المرور الخاصة بك",
             logout: "خروج",
             studentsCount: "طالب مسجل",
@@ -114,6 +118,7 @@ export default function Dashboard({
             teachers: "Teachers",
             students: "Students",
             assignments: "Assignments",
+            groups: "Groups",
             changePass: "Change your password",
             logout: "Logout",
             studentsCount: "Registered Students",
@@ -191,6 +196,11 @@ export default function Dashboard({
     const [selectedStudentIds, setSelectedStudentIds] = useState([]);
     const [sectionStudents, setSectionStudents] = useState([]);
     const [loadingSectionStudents, setLoadingSectionStudents] = useState(false);
+    const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+    const [editingGroup, setEditingGroup] = useState(null);
+
+    const openAddGroup = () => { setEditingGroup(null); setIsAddGroupOpen(true); };
+    const openEditGroup = (group) => { setEditingGroup(group); setIsAddGroupOpen(true); };
 
     const [resetModal, setResetModal] = useState({ open: false, teacher: null });
     const { data: pwdData, setData: setPwdData, post: postPwd, processing: pwdProcessing, errors: pwdErrors, reset: pwdReset } = useForm({
@@ -253,7 +263,7 @@ export default function Dashboard({
 
     const logout = () => router.post(route('logout'));
 
-    const filteredReports = reports.filter(r => {
+    const filteredReports = (reports.data || []).filter(r => {
         const matchesSearch = r.name_ar.includes(search) || (r.name_en && r.name_en.toLowerCase().includes(search.toLowerCase()));
         if (!matchesSearch) return false;
         
@@ -273,35 +283,39 @@ export default function Dashboard({
 
     // Flatten data for Global Search
     const searchIndex = React.useMemo(() => {
-        if (!reports || !Array.isArray(reports)) return [];
-        
         const index = [];
-        reports.forEach(teacher => {
-            const teacherName = teacher.name_ar || teacher.name_en || 'بدون اسم';
-            
-            // Add teacher
-            index.push({
-                type: 'Teacher',
-                name: teacherName,
-                id: teacher.id,
-                subtext: `${teacher.assignments?.length || 0} مادة/شعبة`
+        
+        // Add ALL teachers for global search
+        if (all_teachers_list && Array.isArray(all_teachers_list)) {
+            all_teachers_list.forEach(teacher => {
+                index.push({
+                    type: 'Teacher',
+                    name: teacher.name_ar || teacher.name_en || 'بدون اسم',
+                    id: teacher.id,
+                    subtext: lang === 'ar' ? 'معلم' : 'Teacher'
+                });
             });
+        }
 
-            // Add subjects and classes
-            (teacher.assignments || []).forEach(ass => {
-                const subjName = ass.label || ass.subject_id || 'مادة غير معروفة';
+        // Add subjects and classes from current page reports
+        if (reports && Array.isArray(reports.data)) {
+            reports.data.forEach(teacher => {
+                const teacherName = teacher.name_ar || teacher.name_en || 'بدون اسم';
+                
+                (teacher.assignments || []).forEach(ass => {
+                const subjName = ass.label || (lang === 'ar' ? ass.label_ar : ass.label_en) || ass.subject_id || 'مادة غير معروفة';
                 const className = ass.section_name || 'شعبة غير معروفة';
                 
                 // Unique identifying keys
-                const subjId = `t${teacher.id}-sub-${ass.subject_id}-${ass.section_id}`;
-                const classId = `t${teacher.id}-cls-${ass.section_id}-${ass.subject_id}`;
+                const subjId = `t${teacher.id}-sub-${ass.subject_id}-${ass.section_id}-${ass.group_id || ''}`;
+                const classId = `t${teacher.id}-cls-${ass.section_id}-${ass.subject_id}-${ass.group_id || ''}`;
 
                 index.push({
                     type: 'Subject',
                     name: subjName,
                     id: subjId,
                     subtext: `بواسطة ${teacherName} — ${className}`,
-                    payload: { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1 }
+                    payload: { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1, group_id: ass.group_id }
                 });
 
                 index.push({
@@ -309,10 +323,11 @@ export default function Dashboard({
                     name: className,
                     id: classId,
                     subtext: `بواسطة ${teacherName} — ${subjName}`,
-                    payload: { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1 }
+                    payload: { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1, group_id: ass.group_id }
                 });
             });
         });
+    }
         // Add Students
         if (students_list && Array.isArray(students_list)) {
             students_list.forEach(student => {
@@ -327,9 +342,9 @@ export default function Dashboard({
 
         console.log('Search Index Created:', index.length, 'items');
         return index;
-    }, [reports, students_list]);
+    }, [reports, students_list, all_teachers_list, lang]);
 
-    const handleSearchSelect = (result) => {
+    const handleSearchSelect = React.useCallback((result) => {
         if (result.type === 'Teacher') {
             setTab('teachers');
             setTimeout(() => {
@@ -347,9 +362,9 @@ export default function Dashboard({
             // Navigate to grades page for subjects/classes
             router.get(route('admin.subject-grades', result.payload));
         }
-    };
+    }, []);
 
-    const fetchStudents = async (page = 1) => {
+    const fetchStudents = React.useCallback(async (page = 1) => {
         setStudentLoading(true);
         try {
             const resp = await axios.get(route('api.admin.students'), {
@@ -362,13 +377,22 @@ export default function Dashboard({
         } finally {
             setStudentLoading(false);
         }
-    };
+    }, [studentFilters]);
+
+    const handleGlobalSearch = React.useCallback((val) => {
+        setSearch(val);
+        setStudentFilters(f => ({ ...f, search: val }));
+    }, []);
+
+    const handleStudentSearch = React.useCallback((val) => {
+        setStudentFilters(f => ({ ...f, search: val }));
+    }, []);
 
     useEffect(() => {
         if (tab === 'students') {
             fetchStudents();
         }
-    }, [tab, studentFilters]);
+    }, [tab, studentFilters, fetchStudents]);
 
     const handleArchiveStudent = (id) => {
         setConfirmModal({
@@ -389,7 +413,7 @@ export default function Dashboard({
     };
 
     // Assignments Logic
-    const fetchStaffAssignments = async (staffId) => {
+    const fetchStaffAssignments = React.useCallback(async (staffId) => {
         if (!staffId) return;
         try {
             const resp = await axios.get(route('api.admin.staff-assignments', staffId));
@@ -397,7 +421,7 @@ export default function Dashboard({
         } catch (err) {
             console.error(err);
         }
-    };
+    }, []);
 
     useEffect(() => {
         if (selectedStaff) {
@@ -405,7 +429,7 @@ export default function Dashboard({
         } else {
             setCurrentAssignments([]);
         }
-    }, [selectedStaff]);
+    }, [selectedStaff, fetchStaffAssignments]);
 
     useEffect(() => {
         const fetchSectionStudents = async () => {
@@ -501,9 +525,26 @@ export default function Dashboard({
         });
     };
 
+    const handleDeleteGroup = (id) => {
+        setConfirmModal({
+            isOpen: true,
+            id: id,
+            type: 'danger',
+            title: lang === 'ar' ? 'حذف مجموعة' : 'Delete Group',
+            message: lang === 'ar' ? 'هل أنت متأكد من حذف هذه المجموعة؟ سيتم حذف جميع التقييمات المرتبطة بها.' : 'Are you sure you want to delete this group? All associated assessments will be removed.',
+            action: 'delete_group'
+        });
+    };
+
+    const performDeleteGroup = () => {
+        const id = confirmModal.id;
+        setConfirmModal(f => ({ ...f, isOpen: false }));
+        router.delete(route('admin.groups.destroy', id));
+    };
+
     return (
         <div className="admin-portal-body" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-            <Head title={lang === 'ar' ? "لوحة التحكم" : "Admin Dashboard"} />
+            <Head title={lang === 'ar' ? "لوحة التحكم — مدرسة مدينة زايد بنين" : "Admin Dashboard — Madinat Zayed School"} />
             <div className="legacy-admin-bar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -535,6 +576,14 @@ export default function Dashboard({
                             </div>
                         )}
                     </div>
+                    
+                    {/* Top Bar Debounced Search */}
+                    <div className="w-64">
+                        <DebouncedSearchInput 
+                            onSearch={handleGlobalSearch}
+                            placeholder={t.searchPlaceholder}
+                        />
+                    </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -550,6 +599,10 @@ export default function Dashboard({
                         onClick={() => setTab('assignments')} 
                         className={`leg-tab-btn ${tab === 'assignments' ? 'active' : ''}`}
                     >{t.assignments}</button>
+                    <button 
+                        onClick={() => setTab('groups')} 
+                        className={`leg-tab-btn ${tab === 'groups' ? 'active' : ''}`}
+                    >{t.groups}</button>
                     
                     <button 
                         className="leg-icon-btn" 
@@ -566,6 +619,21 @@ export default function Dashboard({
                 </div>
             </div>
 
+            <style>
+                {`
+                .leg-kpi-container {
+                    background: #394867 !important;
+                    padding: 15px 20px;
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                    gap: 15px;
+                }
+                @media (max-width: 768px) {
+                    .leg-kpi-container { grid-template-columns: 1fr; }
+                    .modal-container { width: 95% !important; max-width: 100% !important; }
+                }
+                `}
+            </style>
             <div className="leg-kpi-container">
                 <div className="leg-kpi-card">
                     <div className="kinfo">
@@ -717,13 +785,18 @@ export default function Dashboard({
                                         <div className="ltc-subjects">
                                             {(teacher.assignments || []).map((ass, idx) => {
                                                 const ratStr = ass.completion_ratio || '1/5';
-                                                const secStr = ass.section_name || '10Gen';
+                                                const secStr = ass.section_name || '';
                                                 const pctStr = ass.has_data ? '(20%)' : '(0%)';
                                                 
                                                 return (
                                                     <Link 
                                                         key={idx} 
-                                                        href={route('admin.subject-grades', { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1 })} 
+                                                        href={route('admin.subject-grades', { 
+                                                            staffId: teacher.id, 
+                                                            sectionId: ass.section_id || 1, 
+                                                            subjectId: ass.subject_id || 1,
+                                                            group_id: ass.group_id
+                                                        })} 
                                                         className="ltc-subj-pill link-pill"
                                                     >
                                                         <span className="lsp-icon">👁️</span>
@@ -734,18 +807,42 @@ export default function Dashboard({
                                                 );
                                             })}
                                             {(!teacher.assignments || teacher.assignments.length === 0) && (
-                                              <Link href="#" className="ltc-subj-pill link-pill">
-                                                <span className="lsp-icon">👁️</span>
-                                                <span className="lsp-text">
-                                                    (20%) <span style={{ fontWeight: 700, margin: '0 4px', color: '#1e293b'}}>1/5</span> 8Gen10 — {lang === 'ar' ? 'علوم عامة' : 'General Science'}
-                                                </span>
-                                              </Link>
+                                              <div className="text-slate-400 text-sm italic px-4 py-2">
+                                                  {t.noAssignments}
+                                              </div>
                                             )}
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
+
+                        {/* Teachers Pagination */}
+                        {reports.last_page > 1 && (
+                            <div className="flex justify-center items-center gap-3 mt-10 mb-6 p-4 bg-white/40 backdrop-blur-sm rounded-2xl border border-white/20 shadow-sm">
+                                <Link 
+                                    href={reports.prev_page_url || '#'} 
+                                    only={['reports']}
+                                    preserveScroll
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm transition-all ${!reports.prev_page_url ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-50 hover:shadow-md active:scale-95'}`}
+                                >
+                                    <span className={lang === 'ar' ? 'rotate-180' : ''}>←</span>
+                                </Link>
+                                
+                                <div className="px-6 py-2 bg-[#27374D] text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg">
+                                    {lang === 'ar' ? "الصفحة" : "Page"} {reports.current_page} {lang === 'ar' ? "من" : "of"} {reports.last_page}
+                                </div>
+
+                                <Link 
+                                    href={reports.next_page_url || '#'} 
+                                    only={['reports']}
+                                    preserveScroll
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm transition-all ${!reports.next_page_url ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-50 hover:shadow-md active:scale-95'}`}
+                                >
+                                    <span className={lang === 'ar' ? 'rotate-180' : ''}>→</span>
+                                </Link>
+                            </div>
+                        )}
                     </>
                 )}
 
@@ -800,14 +897,11 @@ export default function Dashboard({
                                     </select>
                                 </div>
                                 <div className="relative group">
-                                    <input 
-                                        type="text" 
-                                        className="st-search-input pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 bg-white focus:w-[350px] transition-all outline-none focus:border-indigo-400"
+                                    <DebouncedSearchInput 
+                                        onSearch={handleStudentSearch}
                                         placeholder={t.searchPlaceholder}
-                                        value={studentFilters.search}
-                                        onChange={e => setStudentFilters(f => ({ ...f, search: e.target.value }))}
+                                        className="w-[250px] group-focus-within:w-[350px] transition-all"
                                     />
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 opacity-30 group-focus-within:opacity-100 transition-opacity">🔍</span>
                                 </div>
                             </div>
                         </div>
@@ -820,7 +914,7 @@ export default function Dashboard({
                                         <th className="p-5 text-slate-700 font-extrabold text-sm">{t.studentName}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm">{t.studentNo}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm w-[90px]">{t.grade}</th>
-                                        <th className="p-5 text-slate-700 font-extrabold text-sm w-[90px]">{t.section}</th>
+                                        <th className="p-5 text-slate-700 font-extrabold text-sm min-w-[120px] whitespace-nowrap">{t.section}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm">{t.academicPerformance}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm text-center">{t.actions}</th>
                                     </tr>
@@ -842,7 +936,7 @@ export default function Dashboard({
                                             </td>
                                             <td className="p-5 text-slate-500 font-mono text-sm tracking-tighter">{std.student_no}</td>
                                             <td className="p-5"><span className="st-cell-badge blue">{std.grade?.number}</span></td>
-                                            <td className="p-5"><span className="st-cell-badge purple">{std.section?.letter}</span></td>
+                                            <td className="p-5"><span className="st-cell-badge purple whitespace-nowrap">{std.section?.letter}</span></td>
                                             <td className="p-5">
                                                 <div className="flex items-center gap-3">
                                                     <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
@@ -859,7 +953,7 @@ export default function Dashboard({
                                                     <button 
                                                         className="st-action-circle blue" 
                                                         title="كشف الدرجات"
-                                                        onClick={() => window.open(`/parent/results-direct?sid=${std.id}`, '_blank')}
+                                                        onClick={() => window.open(route('admin.student-results', std.id), '_blank')}
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                                                     </button>
@@ -936,7 +1030,7 @@ export default function Dashboard({
                                         onChange={e => setSelectedStaff(e.target.value)}
                                     >
                                         <option value="">— {t.selectTeacher} —</option>
-                                        {reports.map(staff => (
+                                        {all_teachers_list.map(staff => (
                                             <option key={staff.id} value={staff.id}>{lang === 'ar' ? staff.name_ar : (staff.name_en || staff.name_ar)}</option>
                                         ))}
                                     </select>
@@ -979,7 +1073,7 @@ export default function Dashboard({
                                 <div style={{ background: '#27374D', padding: '30px', borderRadius: '15px', color: '#fff', marginTop: '30px' }}>
                                     <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '25px' }}>➕ {t.addNewAssignment}</h3>
                                     <form onSubmit={handleAddAssignment}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '20px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
                                             <div className="f-field">
                                                 <label className="f-label" style={{ color: '#fff' }}>{t.grade}</label>
                                                 <select className="f-select" style={{ background: '#fff', color: '#1e293b', border: 'none' }} value={assignForm.grade_id} onChange={e => setAssignForm({...assignForm, grade_id: e.target.value, section_id: ''})}>
@@ -1104,12 +1198,106 @@ export default function Dashboard({
                         )}
                     </div>
                 )}
+
+                {tab === 'groups' && (
+                    <div className="groups-tab-content w-full" style={{ animation: 'fadeUp 0.4s ease-out' }}>
+                        <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl border border-slate-200">
+                            <div>
+                                <h2 className="text-2xl font-black text-slate-800">👥 {t.groups}</h2>
+                                <p className="text-slate-400 text-sm">إدارة المجموعات الطلابية للمواد الاختيارية والخاصة</p>
+                            </div>
+                            <button 
+                                className="flex items-center gap-2 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg"
+                                style={{ background: '#27374D' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#394867'}
+                                onMouseLeave={e => e.currentTarget.style.background = '#27374D'}
+                                onClick={openAddGroup}
+                            >
+                                <span>+</span> {lang === 'ar' ? 'إضافة مجموعة جديدة' : 'Add New Group'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {all_groups.map(group => (
+                                <div key={group.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl transition-all group">
+                                    <div className="p-6">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="bg-slate-50 w-12 h-12 rounded-xl flex items-center justify-center text-2xl">📚</div>
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button 
+                                                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-all text-white"
+                                                    style={{ background: '#394867' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#27374D'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = '#394867'}
+                                                    onClick={() => openEditGroup(group)}
+                                                    title={lang === 'ar' ? 'تعديل' : 'Edit'}
+                                                >✏️</button>
+                                                <button 
+                                                    className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all"
+                                                    onClick={() => handleDeleteGroup(group.id)}
+                                                >🗑️</button>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-lg font-black text-slate-800 mb-1">{lang === 'ar' ? group.name_ar : group.name_en || group.name_ar}</h3>
+                                        <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider mb-4">
+                                            <span className="bg-slate-100 px-2 py-1 rounded text-slate-600">{lang === 'ar' ? group.grade?.name_ar : group.grade?.name_en || ('Grade ' + group.grade?.number)}</span>
+                                            <span>•</span>
+                                            <span>{lang === 'ar' ? group.subject?.name_ar : group.subject?.name_en || group.subject?.name_ar}</span>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-4">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">{(lang === 'ar' ? group.teacher?.name_ar : group.teacher?.name_en || group.teacher?.name_ar)?.charAt(0)}</div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-400 font-bold uppercase">{lang === 'ar' ? 'المعلم' : 'Teacher'}</span>
+                                                <span className="text-sm font-bold text-slate-700">{lang === 'ar' ? group.teacher?.name_ar : group.teacher?.name_en || group.teacher?.name_ar}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-slate-500 font-bold">{group.students?.length || 0} {lang === 'ar' ? 'طلاب' : 'students'}</span>
+                                            <div className="flex -space-x-2 rtl:space-x-reverse">
+                                                {(group.students || []).slice(0, 5).map(s => (
+                                                    <div key={s.id} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[8px] font-black" title={lang === 'ar' ? s.name_ar : s.name_en}>
+                                                        {s.name_ar.charAt(0)}
+                                                    </div>
+                                                ))}
+                                                {(group.students?.length || 0) > 5 && (
+                                                    <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400">
+                                                        +{(group.students?.length || 0) - 5}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 border-t border-slate-100 flex justify-between items-center" style={{ background: '#27374D', borderRadius: '0 0 16px 16px' }}>
+                                        <button 
+                                            className="font-bold text-sm transition-colors text-white hover:text-yellow-300" 
+                                            onClick={() => window.open(
+                                                route('admin.subject-grades', { staffId: group.staff_id, sectionId: 1, subjectId: group.subject_id }) + '?group_id=' + group.id, 
+                                                '_blank'
+                                            )}
+                                        >
+                                            {lang === 'ar' ? 'عرض النتائج' : 'View Results'}
+                                        </button>
+                                        <span className="text-slate-500">|</span>
+                                        <button 
+                                            className="font-bold text-sm transition-colors text-slate-300 hover:text-white"
+                                            onClick={() => openEditGroup(group)}
+                                        >
+                                            {lang === 'ar' ? 'تعديل المجموعة' : 'Edit Group'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Teacher Password Reset Modal */}
             {resetModal.open && resetModal.teacher && (
                 <div className="modal-overlay" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-                    <div className="modal-container premium-modal w-[450px]">
+                    <div className="modal-container premium-modal max-w-[450px] w-[95%]">
                         <div className="modal-header-blue" style={{ background: '#27374D' }}>
                             <button className="close-btn" onClick={() => setResetModal({ open: false, teacher: null })}>×</button>
                             <h3 className="modal-title">{lang === 'ar' ? "إعادة تعيين كلمة المرور" : "Reset Password"}</h3>
@@ -1191,16 +1379,27 @@ export default function Dashboard({
                 lang={lang}
                 onConfirm={() => {
                     if (confirmModal.action === 'delete_staff') performDeleteStaff();
+                    else if (confirmModal.action === 'delete_group') performDeleteGroup();
                     else if (confirmModal.type === 'danger') performDeleteAssignment();
                     else confirmArchive();
                 }}
                 onCancel={() => setConfirmModal(f => ({ ...f, isOpen: false }))}
             />
+
+            <AddGroupModal 
+                isOpen={isAddGroupOpen}
+                onClose={() => { setIsAddGroupOpen(false); setEditingGroup(null); }}
+                grades={all_grades}
+                subjects={all_subjects}
+                teachers={all_teachers_list}
+                lang={lang}
+                editGroup={editingGroup}
+            />
             
             {/* Admin Self Reset Modal */}
             {isAdminResetOpen && (
                 <div className="modal-overlay" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-                    <div className="modal-content premium-modal w-[450px]">
+                    <div className="modal-content premium-modal max-w-[450px] w-[95%]">
                         <div className="modal-header-premium">
                             <div className="icon-circle bg-amber-100 text-amber-600">🔑</div>
                             <h3 className="text-xl font-black text-slate-800">تغيير كلمة المرور الخاصة بك</h3>

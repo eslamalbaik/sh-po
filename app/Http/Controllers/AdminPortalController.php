@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\StudentGrade;
 use App\Models\TeacherAssignment;
 use Illuminate\Http\Request;
+use App\Models\Group;
 use App\Models\Grade;
 use App\Models\Section;
 use App\Models\Subject;
@@ -29,28 +30,31 @@ class AdminPortalController extends Controller
             'completion'     => $this->getTotalPerformanceRate(),
         ];
 
-        // 2. تقرير أداء المعلمين
-        $teachers_report = Staff::with(['assignments.section.grade', 'assignments.subject'])
-            ->get()
-            ->map(function($staff) {
-                return [
-                    'id'            => $staff->id,
-                    'user_id'       => $staff->user_id,
-                    'name_ar'       => $staff->name_ar,
-                    'name_en'       => $staff->name_en,
-                    'is_staff'      => $staff->staff_no,
-                    'completion'    => $this->getStaffPerformance($staff->id),
-                    'assignments'   => $staff->assignments->map(function($a) use ($staff) {
+        // 2. تقرير أداء المعلمين (مع الترقيم)
+        $teachers_report = Staff::with(['assignments.section.grade', 'assignments.subject', 'groups.subject'])
+            ->paginate(12); // 12 معلمين في الصفحة
+
+        $teachers_report->getCollection()->transform(function($staff) {
+            return [
+                'id'            => $staff->id,
+                'user_id'       => $staff->user_id,
+                'name_ar'       => $staff->name_ar,
+                'name_en'       => $staff->name_en,
+                'is_staff'      => $staff->staff_no,
+                'completion'    => $this->getStaffPerformance($staff->id),
+                'assignments'   => (function() use ($staff) {
+                    $all = collect();
+                    foreach ($staff->assignments as $a) {
                         $actualCount = \App\Models\Assessment::where([
                             'staff_id'   => $staff->id,
                             'section_id' => $a->section_id,
                             'subject_id' => $a->subject_id
-                        ])->count();
+                        ])->has('studentGrades')->count();
                         
                         $expected = $a->expected_assessments ?? 5;
-                        $pct = $expected > 0 ? round(($actualCount / $expected) * 100) : 0;
+                        $pct = $expected > 0 ? min(round(($actualCount / $expected) * 100), 100) : 0;
 
-                        return [
+                        $all->push([
                             'section_id' => $a->section_id,
                             'subject_id' => $a->subject_id,
                             'section_name' => $a->section->label_ar ?? (($a->section->grade->number ?? '') . ($a->section->letter ?? '')),
@@ -60,18 +64,41 @@ class AdminPortalController extends Controller
                             'completion_ratio' => "{$actualCount}/{$expected}",
                             'completion_pct' => "({$pct}%)",
                             'has_data' => $actualCount > 0
-                        ];
-
-                    })
-                ];
-            });
+                        ]);
+                    }
+                    foreach ($staff->groups as $g) {
+                        $actualCount = \App\Models\Assessment::where('group_id', $g->id)
+                            ->has('studentGrades')
+                            ->count();
+                        $expected = 5;
+                        $pct = $expected > 0 ? min(round(($actualCount / $expected) * 100), 100) : 0;
+                        $all->push([
+                            'group_id' => $g->id,
+                            'type' => 'group',
+                            'section_id' => null,
+                            'subject_id' => $g->subject_id,
+                            'section_name' => $g->name_ar . ' (مجموعة)',
+                            'label' => ($g->subject->name_ar ?? ''),
+                            'label_ar' => ($g->subject->name_ar ?? ''),
+                            'label_en' => ($g->subject->name_en ?? $g->subject->name_ar ?? ''),
+                            'completion_ratio' => "{$actualCount}/{$expected}",
+                            'completion_pct' => "({$pct}%)",
+                            'has_data' => $actualCount > 0
+                        ]);
+                    }
+                    return $all;
+                })()
+            ];
+        });
 
         return Inertia::render('Admin/Dashboard', [
             'stats'        => $stats,
             'reports'      => $teachers_report,
+            'all_teachers_list' => Staff::select('id', 'name_ar', 'name_en')->get(),
             'all_grades'   => Grade::orderBy('number')->get(),
             'all_sections' => Section::all(),
             'all_subjects' => Subject::orderBy('name_ar')->get(),
+            'all_groups'   => Group::with(['teacher', 'subject', 'grade', 'students'])->get(),
             'students_list' => Student::where('is_active', true)
                 ->select('id', 'name_ar', 'student_no')
                 ->get(),
@@ -80,50 +107,37 @@ class AdminPortalController extends Controller
 
     private function getTotalPerformanceRate()
     {
-        $total_score = DB::table('student_grades')->sum('score');
+        // حساب إجمالي التكليفات المسندة (الأقسام + المجموعات)
+        $assignmentCount = DB::table('teacher_assignments')->count();
+        $groupCount = DB::table('groups')->count();
         
-        $total_possible = 0;
-        $assessments = DB::table('assessments')->get(['section_id', 'full_mark']);
+        $totalExpected = ($assignmentCount + $groupCount) * 5;
         
-        // Cache student counts per section to avoid repeated queries
-        $student_counts = DB::table('students')
-            ->where('is_active', true)
-            ->select('section_id', DB::raw('count(*) as count'))
-            ->groupBy('section_id')
-            ->pluck('count', 'section_id');
+        // حساب التكليفات التي تم رصد درجاتها بالفعل
+        $totalActual = \App\Models\Assessment::has('studentGrades')->count();
 
-        foreach ($assessments as $ass) {
-            $count = $student_counts[$ass->section_id] ?? 0;
-            $total_possible += $ass->full_mark * $count;
-        }
-
-        return $total_possible > 0 ? round(($total_score / $total_possible) * 100) : 0;
+        return $totalExpected > 0 ? min(round(($totalActual / $totalExpected) * 100), 100) : 0;
     }
 
     private function getStaffPerformance($staffId)
     {
-        $total_score = DB::table('student_grades')
-            ->join('assessments', 'student_grades.assessment_id', '=', 'assessments.id')
-            ->where('assessments.staff_id', $staffId)
-            ->sum('student_grades.score');
-        
-        $total_possible = 0;
-        $assessments = DB::table('assessments')
+        // حساب عدد المهام المسندة للمعلم (أقسام + مجموعات)
+        $assignmentCount = DB::table('teacher_assignments')
             ->where('staff_id', $staffId)
-            ->get(['section_id', 'full_mark']);
+            ->count();
             
-        $student_counts = DB::table('students')
-            ->where('is_active', true)
-            ->select('section_id', DB::raw('count(*) as count'))
-            ->groupBy('section_id')
-            ->pluck('count', 'section_id');
+        $groupCount = DB::table('groups')
+            ->where('staff_id', $staffId)
+            ->count();
+            
+        $totalExpected = ($assignmentCount + $groupCount) * 5;
+        
+        // حساب عدد التقييمات التي رصد المعلم درجاتها بالفعل
+        $totalActual = \App\Models\Assessment::where('staff_id', $staffId)
+            ->has('studentGrades')
+            ->count();
 
-        foreach ($assessments as $ass) {
-            $count = $student_counts[$ass->section_id] ?? 0;
-            $total_possible += $ass->full_mark * $count;
-        }
-
-        return $total_possible > 0 ? round(($total_score / $total_possible) * 100) : 0;
+        return $totalExpected > 0 ? min(round(($totalActual / $totalExpected) * 100), 100) : 0;
     }
 
     private function checkAssignmentData($sectionId, $subjectId)
@@ -140,9 +154,7 @@ class AdminPortalController extends Controller
         
         if ($request->search) {
             $query->where(function($q) use ($request) {
-                $q->where('name_ar', 'like', "%{$request->search}%")
-                  ->orWhere('student_no', 'like', "%{$request->search}%")
-                  ->orWhere('name_en', 'like', "%{$request->search}%");
+                $q->search($request->search);
             });
         }
         
@@ -172,15 +184,26 @@ class AdminPortalController extends Controller
     private function getStudentPerformance($studentId)
     {
         $student = Student::findOrFail($studentId);
-        $assessments = \App\Models\Assessment::where('section_id', $student->section_id)->get();
-        if ($assessments->isEmpty()) return 0;
         
-        $total_possible = $assessments->sum('full_mark');
-        $total_actual = StudentGrade::where('student_id', $studentId)
-            ->whereIn('assessment_id', $assessments->pluck('id'))
+        // 1. التقييمات العادية للشعبة
+        $sectionAssessments = \App\Models\Assessment::where('section_id', $student->section_id)->get();
+        
+        // 2. تقييمات المجموعات المشترك فيها الطالب
+        $groupAssessments = \App\Models\Assessment::whereHas('group.students', function($q) use ($studentId) {
+            $q->where('students.id', $studentId);
+        })->get();
+
+        $allAssessments = $sectionAssessments->merge($groupAssessments);
+        
+        if ($allAssessments->count() === 0) return 0;
+
+        $totalScore = StudentGrade::where('student_id', $studentId)
+            ->whereIn('assessment_id', $allAssessments->pluck('id'))
             ->sum('score');
             
-        return $total_possible > 0 ? round(($total_actual / $total_possible) * 100) : 0;
+        $totalPossible = $allAssessments->sum('full_mark');
+
+        return $totalPossible > 0 ? min(round(($totalScore / $totalPossible) * 100), 100) : 0;
     }
 
     public function storeStudent(Request $request)
@@ -412,49 +435,62 @@ class AdminPortalController extends Controller
         return back();
     }
 
-    public function viewSubjectGrades($staffId, $sectionId, $subjectId)
+    public function viewSubjectGrades($staffId, $sectionId, $subjectId, \Illuminate\Http\Request $request)
     {
+        $groupId = $request->query('group_id');
         $staff = Staff::findOrFail($staffId);
-        $section = \App\Models\Section::with('grade')->findOrFail($sectionId);
         $subject = \App\Models\Subject::findOrFail($subjectId);
 
-        $assessments = \App\Models\Assessment::where('staff_id', $staffId)
-            ->where('section_id', $sectionId)
-            ->where('subject_id', $subjectId)
-            ->get();
+        // --- Group mode ---
+        if ($groupId) {
+            $group = Group::with(['grade', 'students', 'teacher'])->findOrFail($groupId);
 
-        $assignment = TeacherAssignment::where([
-            'staff_id'   => $staffId,
-            'section_id' => $sectionId,
-            'subject_id' => $subjectId
-        ])->first();
+            $assessments = \App\Models\Assessment::where('group_id', $groupId)
+                ->where('subject_id', $subjectId)
+                ->get();
 
-        $electiveStudentIds = [];
-        if ($assignment) {
-            $electiveStudentIds = DB::table('elective_students')
-                ->where('assignment_id', $assignment->id)
-                ->pluck('student_id')
-                ->toArray();
+            $students = $group->students()->where('is_active', true)->orderBy('name_ar')->get();
+            $section = (object) ['grade' => $group->grade, 'letter' => '(مجموعة)', 'label_ar' => $group->name_ar];
+
+        // --- Normal section mode ---
+        } else {
+            $section = \App\Models\Section::with('grade')->findOrFail($sectionId);
+
+            $assessments = \App\Models\Assessment::where('staff_id', $staffId)
+                ->where('section_id', $sectionId)
+                ->where('subject_id', $subjectId)
+                ->get();
+
+            $assignment = TeacherAssignment::where([
+                'staff_id'   => $staffId,
+                'section_id' => $sectionId,
+                'subject_id' => $subjectId
+            ])->first();
+
+            $electiveStudentIds = [];
+            if ($assignment) {
+                $electiveStudentIds = DB::table('elective_students')
+                    ->where('assignment_id', $assignment->id)
+                    ->pluck('student_id')
+                    ->toArray();
+            }
+
+            $studentQuery = Student::where('section_id', $sectionId)->where('is_active', true);
+            if (!empty($electiveStudentIds)) {
+                $studentQuery->whereIn('id', $electiveStudentIds);
+            }
+            $students = $studentQuery->orderBy('name_ar')->get();
         }
-
-        $studentQuery = Student::where('section_id', $sectionId)
-            ->where('is_active', true);
-
-        if (!empty($electiveStudentIds)) {
-            $studentQuery->whereIn('id', $electiveStudentIds);
-        }
-
-        $students = $studentQuery->orderBy('name_ar')->get();
 
         $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))->get();
 
         return Inertia::render('Admin/SubjectGrades', [
-            'staff' => $staff,
-            'section' => $section,
-            'subject' => $subject,
+            'staff'       => $staff,
+            'section'     => $section,
+            'subject'     => $subject,
             'assessments' => $assessments,
-            'students' => $students,
-            'grades' => $grades,
+            'students'    => $students,
+            'grades'      => $grades,
         ]);
     }
 
@@ -494,52 +530,17 @@ class AdminPortalController extends Controller
             ->with(['section.grade', 'subject'])
             ->get();
 
-        $reportData = $assignments->map(function($a) use ($id) {
-            $assessments = \App\Models\Assessment::where([
-                'staff_id'   => $id,
-                'section_id' => $a->section_id,
-                'subject_id' => $a->subject_id
-            ])->get();
+        $groups = Group::where('staff_id', $id)
+            ->with(['grade', 'subject', 'students'])
+            ->get();
 
-            $electiveStudentIds = DB::table('elective_students')
-                ->where('assignment_id', $a->id)
-                ->pluck('student_id')
-                ->toArray();
+        $mergedItems = collect();
 
-            $studentQuery = Student::where('section_id', $a->section_id)
-                ->where('is_active', true);
-
-            if (!empty($electiveStudentIds)) {
-                $studentQuery->whereIn('id', $electiveStudentIds);
-            }
-
-            $students = $studentQuery->orderBy('name_ar')->get();
-            $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))->get();
-
-            // Calculate Success Rate
-            $totalStudents = $students->count();
-            $passedCount = 0;
-            
-            if ($totalStudents > 0 && $assessments->count() > 0) {
-                foreach ($students as $student) {
-                    $studentTotal = $grades->where('student_id', $student->id)->sum('score');
-                    $fullTotal = $assessments->sum('full_mark');
-                    if ($fullTotal > 0 && ($studentTotal / $fullTotal) >= 0.5) {
-                        $passedCount++;
-                    }
-                }
-            }
-
-            $successRate = $totalStudents > 0 ? round(($passedCount / $totalStudents) * 100) : 0;
-            $avgScore = 0;
-            if ($totalStudents > 0 && $assessments->count() > 0) {
-                $actualSum = $grades->sum('score');
-                $possibleSum = $totalStudents * $assessments->sum('full_mark');
-                $avgScore = $possibleSum > 0 ? round(($actualSum / $possibleSum) * 100) : 0;
-            }
-
-            return [
+        // Add Assignments
+        foreach ($assignments as $a) {
+            $mergedItems->push([
                 'id' => $a->id,
+                'type' => 'section',
                 'section_id' => $a->section_id,
                 'subject_id' => $a->subject_id,
                 'section_name' => $a->section->label_ar ?? ($a->section->grade->number . $a->section->letter),
@@ -547,7 +548,87 @@ class AdminPortalController extends Controller
                 'subject_name_ar' => (string)$a->subject->name_ar,
                 'subject_name_en' => !empty($a->subject->name_en) ? (string)$a->subject->name_en : (string)$a->subject->name_ar,
                 'subject' => $a->subject,
-                'assessments' => $assessments,
+                'section' => $a->section,
+            ]);
+        }
+
+        // Add Groups
+        foreach ($groups as $g) {
+            $mergedItems->push([
+                'id' => $g->id,
+                'type' => 'group',
+                'section_id' => null,
+                'group_id' => $g->id,
+                'subject_id' => $g->subject_id,
+                'section_name' => $g->name_ar . ' (مجموعة)',
+                'subject_name' => (string)$g->subject->name_ar,
+                'subject_name_ar' => (string)$g->subject->name_ar,
+                'subject_name_en' => !empty($g->subject->name_en) ? (string)$g->subject->name_en : (string)$g->subject->name_ar,
+                'subject' => $g->subject,
+                'group' => $g,
+            ]);
+        }
+
+        $reportData = $mergedItems->map(function($item) use ($id) {
+            $assessments = \App\Models\Assessment::where('subject_id', $item['subject_id']);
+            
+            if ($item['type'] === 'group') {
+                $assessments->where('group_id', $item['group_id']);
+                $students = $item['group']->students()->where('is_active', true)->get();
+            } else {
+                $assessments->where('staff_id', $id)->where('section_id', $item['section_id']);
+                
+                $electiveStudentIds = DB::table('elective_students')
+                    ->where('assignment_id', $item['id'])
+                    ->pluck('student_id')
+                    ->toArray();
+
+                $studentQuery = Student::where('section_id', $item['section_id'])
+                    ->where('is_active', true);
+
+                if (!empty($electiveStudentIds)) {
+                    $studentQuery->whereIn('id', $electiveStudentIds);
+                }
+                $students = $studentQuery->orderBy('name_ar')->get();
+            }
+
+            $assessmentsList = $assessments->get();
+            $grades = StudentGrade::whereIn('assessment_id', $assessmentsList->pluck('id'))->get();
+
+            // Calculate Success Rate
+            $totalStudents = $students->count();
+            $passedCount = 0;
+            
+            if ($totalStudents > 0 && $assessmentsList->count() > 0) {
+                foreach ($students as $student) {
+                    $studentTotal = $grades->where('student_id', $student->id)->sum('score');
+                    $fullTotal = $assessmentsList->sum('full_mark');
+                    if ($fullTotal > 0 && ($studentTotal / $fullTotal) >= 0.5) {
+                        $passedCount++;
+                    }
+                }
+            }
+
+            $successRate = $totalStudents > 0 ? min(round(($passedCount / $totalStudents) * 100), 100) : 0;
+            $avgScore = 0;
+            if ($totalStudents > 0 && $assessmentsList->count() > 0) {
+                $actualSum = $grades->sum('score');
+                $possibleSum = $totalStudents * $assessmentsList->sum('full_mark');
+                $avgScore = $possibleSum > 0 ? min(round(($actualSum / $possibleSum) * 100), 100) : 0;
+            }
+
+            return [
+                'id' => $item['id'],
+                'type' => $item['type'],
+                'section_id' => $item['section_id'],
+                'group_id' => $item['group_id'] ?? null,
+                'subject_id' => $item['subject_id'],
+                'section_name' => $item['section_name'],
+                'subject_name' => $item['subject_name'],
+                'subject_name_ar' => $item['subject_name_ar'],
+                'subject_name_en' => $item['subject_name_en'],
+                'subject' => $item['subject'],
+                'assessments' => $assessmentsList,
                 'students' => $students,
                 'grades' => $grades,
                 'success_rate' => $successRate,
@@ -561,5 +642,121 @@ class AdminPortalController extends Controller
             'staff' => $staff,
             'reportData' => $reportData,
         ]);
+    }
+
+    public function viewStudentResults($id)
+    {
+        $student = Student::with(['grade', 'section'])->findOrFail($id);
+        
+        $results = \App\Models\StudentResultView::forStudent($id)
+            ->orderBy('display_order')
+            ->get();
+
+        // جلب المجموعات المسجل فيها الطالب
+        $groups = \App\Models\Group::whereHas('students', function($q) use ($id) {
+                $q->where('students.id', $id);
+            })
+            ->with(['subject', 'teacher', 'grade'])
+            ->get()
+            ->map(function($g) {
+                return [
+                    'id'              => $g->id,
+                    'type'            => 'group',
+                    'name_ar'         => $g->name_ar,
+                    'name_en'         => $g->name_en ?? $g->name_ar,
+                    'subject_name_ar' => $g->subject->name_ar ?? '',
+                    'subject_name_en' => $g->subject->name_en ?? $g->subject->name_ar ?? '',
+                    'teacher_name_ar' => $g->teacher->name_ar ?? '',
+                    'teacher_name_en' => $g->teacher->name_en ?? $g->teacher->name_ar ?? '',
+                    'grade_name'      => $g->grade->number ?? '',
+                    'students_count'  => 0,
+                    'subject_id'      => $g->subject_id,
+                ];
+            })->values()->all();
+
+        session(['parent_student_id' => $id]);
+
+        return Inertia::render('Parent/Results', [
+            'student' => $student,
+            'results' => $results,
+            'groups'  => $groups,
+            'isAdminView' => true
+        ]);
+    }
+
+    /**
+     * إضافة مجموعة جديدة
+     */
+    public function storeGroup(Request $request)
+    {
+        $request->validate([
+            'name_ar'     => 'required|string|max:100',
+            'name_en'     => 'nullable|string|max:100',
+            'staff_id'    => 'required|exists:staff,id',
+            'subject_id'  => 'required|exists:subjects,id',
+            'grade_id'    => 'required|exists:grades,id',
+            'student_ids' => 'nullable|array',
+            'student_ids.*' => 'exists:students,id',
+        ]);
+
+        $group = Group::create([
+            'id'         => (string) Str::uuid(),
+            'name_ar'    => $request->name_ar,
+            'name_en'    => $request->name_en ?? $request->name_ar,
+            'staff_id'   => $request->staff_id,
+            'subject_id' => $request->subject_id,
+            'grade_id'   => $request->grade_id,
+        ]);
+
+        if ($request->student_ids && count($request->student_ids) > 0) {
+            $group->students()->sync($request->student_ids);
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * تعديل مجموعة
+     */
+    public function updateGroup(Request $request, $id)
+    {
+        $request->validate([
+            'name_ar'     => 'required|string|max:100',
+            'name_en'     => 'nullable|string|max:100',
+            'description' => 'nullable|string',
+            'staff_id'    => 'required|exists:staff,id',
+            'subject_id'  => 'required|exists:subjects,id',
+            'grade_id'    => 'required|exists:grades,id',
+            'student_ids' => 'nullable|array',
+            'student_ids.*' => 'exists:students,id',
+        ]);
+
+        $group = Group::findOrFail($id);
+        $group->update([
+            'name_ar'     => $request->name_ar,
+            'name_en'     => $request->name_en ?? $request->name_ar,
+            'description' => $request->description,
+            'staff_id'    => $request->staff_id,
+            'subject_id'  => $request->subject_id,
+            'grade_id'    => $request->grade_id,
+        ]);
+
+        if ($request->has('student_ids')) {
+            $group->students()->sync($request->student_ids ?? []);
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * حذف مجموعة
+     */
+    public function deleteGroup($id)
+    {
+        $group = Group::findOrFail($id);
+        $group->students()->detach();
+        $group->delete();
+
+        return redirect()->back();
     }
 }

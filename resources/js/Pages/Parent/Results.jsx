@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
+import GroupCard from '@/Components/GroupCard';
+import SubjectResultCard from '@/Components/SubjectResultCard';
+import '../../../css/ParentPortal.css';
 
-export default function Results({ student, results }) {
-    const [seconds, setSeconds] = useState(1800); // 30 minutes
+export default function Results({ student, results = [], groups = [], isAdminView = false }) {
     const [lang, setLang] = useState('ar');
     const [isLangOpen, setIsLangOpen] = useState(false);
     const [selectedSubj, setSelectedSubj] = useState(null);
@@ -10,35 +12,10 @@ export default function Results({ student, results }) {
     const isAr = lang === 'ar';
 
     useEffect(() => {
-        // Persistent timer logic
-        const sessionKey = 'parent_session_end';
-        let endTime = sessionStorage.getItem(sessionKey);
-        
-        if (!endTime) {
-            endTime = Date.now() + 30 * 60 * 1000;
-            sessionStorage.setItem(sessionKey, endTime);
-        }
+        console.log('Results Page Mount. isAdminView:', isAdminView);
+    }, [isAdminView]);
 
-        const tick = () => {
-            const now = Date.now();
-            const remain = Math.max(0, Math.floor((endTime - now) / 1000));
-            setSeconds(remain);
-            if (remain <= 0) {
-                clearInterval(timer);
-                logout();
-            }
-        };
 
-        const timer = setInterval(tick, 1000);
-        tick();
-        return () => clearInterval(timer);
-    }, []);
-
-    const formatTime = (secs) => {
-        const m = Math.floor(secs / 60);
-        const s = secs % 60;
-        return `${m}:${s < 10 ? '0' + s : s}`;
-    };
 
     const getInitials = (name) => {
         if (!name) return 'S';
@@ -61,40 +38,84 @@ export default function Results({ student, results }) {
         'الحاسوب': '💻', 'Computer Science': '💻',
         'الفنون': '🎨', 'Art': '🎨',
     };
-
     const getIcon = (ar, en) => SUBJECT_ICONS[ar] || SUBJECT_ICONS[en] || '📚';
     const gbg = (p) => p >= 85 ? 'fill-g' : p >= 70 ? 'fill-b' : p >= 50 ? 'fill-a' : 'fill-r';
     const gpill = (p) => p >= 85 ? 'pill-g' : p >= 70 ? 'pill-b' : p >= 50 ? 'pill-a' : 'pill-r';
 
     // المجموعة حسب المادة
     const bySubj = {};
+    
+    // 1. إضافة المجموعات الأساسية أولاً (لضمان ظهورها حتى لو فارغة)
+    groups.forEach(g => {
+        const key = g.id; // UUID المجموعة كـ مفتاح
+        if (!bySubj[key]) {
+            bySubj[key] = {
+                id: g.id,
+                type: 'group',
+                nameAr: g.name_ar,
+                nameEn: g.name_en,
+                subjectNameAr: g.subject_name_ar,
+                subjectNameEn: g.subject_name_en,
+                teacherAr: g.teacher_name_ar,
+                teacherEn: g.teacher_name_en,
+                evals: []
+            };
+        }
+    });
+
+    // 2. إضافة النتائج الفعلية
     results.forEach(r => {
-        const key = r.subject_ar;
-        if (!bySubj[key]) bySubj[key] = {
-            nameAr: r.subject_ar,
-            nameEn: r.subject_en,
-            teacherAr: r.teacher_ar,
-            teacherEn: r.teacher_en,
-            evals: []
-        };
+        // إذا كانت نتيجة مجموعة، نستخدم معرف المجموعة، وإلا نستخدم اسم المادة والمعلم كمفتاح
+        const key = r.group_id || `${r.subject_ar}_${r.teacher_ar}`;
+        
+        if (!bySubj[key]) {
+            bySubj[key] = {
+                id: r.group_id,
+                type: r.group_id ? 'group' : 'section',
+                nameAr: r.group_name_ar ? `${r.subject_ar} (${r.group_name_ar})` : r.subject_ar,
+                nameEn: r.subject_en,
+                subjectNameAr: r.subject_ar,
+                subjectNameEn: r.subject_en,
+                teacherAr: r.teacher_ar,
+                teacherEn: r.teacher_en,
+                evals: []
+            };
+        }
         bySubj[key].evals.push(r);
     });
+
     const subjects = Object.values(bySubj);
 
-    // حساب الإحصائيات
+    // حساب الإحصائيات بناءً على متوسط 5 تكليفات
     const subjStats = subjects.map(s => {
         const entered = s.evals.filter(e => e.score !== null && e.score !== undefined && !e.is_absent);
-        const tot = Math.round(entered.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) * 10) / 10;
-        const full = entered.reduce((sum, e) => sum + (parseFloat(e.full_mark) || 20), 0);
-        const pct = full > 0 ? Math.round((tot / full) * 100) : 0;
-        return { tot, full, pct, hasScores: entered.length > 0, count: entered.length };
+        
+        // حساب مجموع النسب المئوية للتكليفات (بحد أقصى 5 تكليفات)
+        const totalPercentages = entered.slice(0, 5).reduce((sum, e) => {
+            const pct = e.full_mark > 0 ? (parseFloat(e.score) / e.full_mark) * 100 : 0;
+            return sum + pct;
+        }, 0);
+
+        // المتوسط النهائي (الدرجة النهائية) هو مجموع النسب مقسوماً على 5
+        const finalGrade = Math.round(totalPercentages / 5);
+
+        return { 
+            tot: finalGrade, 
+            full: 100, 
+            pct: finalGrade, 
+            hasScores: entered.length > 0, 
+            count: entered.length 
+        };
     });
 
     const totalScore = subjStats.reduce((a, b) => a + b.tot, 0);
     const totalFull = subjStats.reduce((a, b) => a + b.full, 0);
     const overallAvg = totalFull > 0 ? Math.round((totalScore / totalFull) * 100) : 0;
 
-    const logout = () => router.post(route('parent.logout'));
+    const logout = (reason = 'USER_ACTION') => {
+        console.log('Logging out. Reason:', reason);
+        router.post(route('parent.logout'));
+    };
 
     if (selectedSubj !== null) {
         return <Detail 
@@ -198,10 +219,12 @@ export default function Results({ student, results }) {
                                     </div>
                                 )}
                             </div>
-                            <div className="timer-badge">
-                                {isAr ? 'الجلسه: ' : 'Session: '}{formatTime(seconds)}
-                            </div>
-                            <button className="logout-btn" onClick={logout}>{isAr ? 'خروج' : 'Exit'}</button>
+                            {!isAdminView && (
+                                <button className="logout-btn" onClick={logout}>{isAr ? 'خروج' : 'Exit'}</button>
+                            )}
+                            {isAdminView && (
+                                <button className="logout-btn" style={{ background: '#334155' }} onClick={() => window.close()}>{isAr ? 'إغلاق' : 'Close'}</button>
+                            )}
                         </div>
                     </>
                 ) : (
@@ -278,10 +301,12 @@ export default function Results({ student, results }) {
                                     </div>
                                 )}
                             </div>
-                            <div className="timer-badge">
-                                {isAr ? 'الجلسه: ' : 'Session: '}{formatTime(seconds)}
-                            </div>
-                            <button className="logout-btn" onClick={logout}>{isAr ? 'خروج' : 'Exit'}</button>
+                            {!isAdminView && (
+                                <button className="logout-btn" onClick={logout}>{isAr ? 'خروج' : 'Exit'}</button>
+                            )}
+                            {isAdminView && (
+                                <button className="logout-btn" style={{ background: '#334155' }} onClick={() => window.close()}>{isAr ? 'إغلاق' : 'Close'}</button>
+                            )}
                         </div>
                         <div className="top-student">
                             <div className="top-avatar">{getInitials(isAr ? student.name_ar : student.name_en)}</div>
@@ -332,30 +357,19 @@ export default function Results({ student, results }) {
                     </div>
                 </div>
 
-                <div className="subj-list">
+                <div className="mb-6 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-slate-800">{isAr ? 'موادي ومجموعاتي الدراسية' : 'My Subjects & Groups'}</h2>
+                </div>
+
+                <div className="subj-list-premium">
                     {subjects.map((s, i) => (
-                        <div key={i} className="subj-card" onClick={() => setSelectedSubj(i)}>
-                            <div className="subj-top">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <div className="subj-icon">{getIcon(s.nameAr, s.nameEn)}</div>
-                                    <div>
-                                        <div className="subj-name">{isAr ? s.nameAr : s.nameEn}</div>
-                                        <div className="subj-teacher">{isAr ? s.teacherAr : s.teacherEn}</div>
-                                    </div>
-                                </div>
-                                <span className={`score-pill ${gpill(subjStats[i].pct)}`}>{subjStats[i].pct}%</span>
-                            </div>
-                            <div className="bar-track">
-                                <div className={`bar-fill ${gbg(subjStats[i].pct)}`} style={{ width: `${subjStats[i].pct}%` }}></div>
-                            </div>
-                            <div className="subj-footer">
-                                {subjStats[i].count === 0 
-                                    ? <span className="subj-ev-badge">⏳ {isAr ? 'لم تُرصد درجات' : 'No grades'}</span>
-                                    : <span className="subj-ev-badge">{subjStats[i].count} {isAr ? 'تقييمات' : 'assessments'}</span>
-                                }
-                                <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{subjStats[i].tot} / {subjStats[i].full}</span>
-                            </div>
-                        </div>
+                        <SubjectResultCard
+                            key={i}
+                            subject={s}
+                            stats={subjStats[i]}
+                            lang={lang}
+                            onClick={() => setSelectedSubj(i)}
+                        />
                     ))}
                 </div>
             </div>
@@ -404,8 +418,11 @@ function Detail({ subject, stats, lang, onBack }) {
                 </div>
 
                 {subject.evals.map((e, i) => {
-                    const epct = e.full_mark > 0 ? Math.round((e.score / e.full_mark) * 100) : 0;
-                    const eColor = epct >= 85 ? '#1D9E75' : epct >= 70 ? '#1F4E79' : epct >= 50 ? '#EF9F27' : '#E24B4A';
+                    const isNotRecorded = e.score === null || e.score === undefined;
+                    const isAbsent = e.is_absent;
+                    const epct = e.full_mark > 0 ? Math.round((parseFloat(e.score || 0) / e.full_mark) * 100) : 0;
+                    const eColor = isNotRecorded ? '#94a3b8' : isAbsent ? '#E24B4A' : epct >= 85 ? '#1D9E75' : epct >= 70 ? '#1F4E79' : epct >= 50 ? '#EF9F27' : '#E24B4A';
+                    
                     return (
                         <div key={i} className="eval-card">
                             <div className="eval-top">
@@ -420,17 +437,39 @@ function Detail({ subject, stats, lang, onBack }) {
                             <div className="scores-grid">
                                 <div className="score-col">
                                     <div className="score-lbl">{isAr ? 'الدرجة' : 'Score'}</div>
-                                    <div><span className="score-num" style={{ color: eColor }}>{e.score}</span><span className="score-den">/{e.full_mark}</span></div>
+                                    <div>
+                                        {isNotRecorded ? (
+                                            <span className="score-num" style={{ color: '#94a3b8', fontSize: '16px' }}>{isAr ? 'لم ترصد' : 'Not Recorded'}</span>
+                                        ) : isAbsent ? (
+                                            <span className="score-num" style={{ color: '#E24B4A', fontSize: '16px' }}>{isAr ? 'غائب' : 'Absent'}</span>
+                                        ) : (
+                                            <>
+                                                <span className="score-num" style={{ color: eColor }}>{e.score}</span>
+                                                <span className="score-den">/{e.full_mark}</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="score-div"></div>
                                 <div className="score-col">
                                     <div className="score-lbl">{isAr ? 'النسبة' : 'Percentage'}</div>
-                                    <div><span className="score-num" style={{ color: eColor }}>{epct}</span><span className="score-den">%</span></div>
+                                    <div>
+                                        {isNotRecorded || isAbsent ? (
+                                            <span className="score-num" style={{ color: '#94a3b8' }}>-</span>
+                                        ) : (
+                                            <>
+                                                <span className="score-num" style={{ color: eColor }}>{epct}</span>
+                                                <span className="score-den">%</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="eval-bar">
-                                <div className={`prog-bar-fill ${gbg(epct)}`} style={{ width: `${epct}%` }}></div>
-                            </div>
+                            {!isNotRecorded && !isAbsent && (
+                                <div className="eval-bar">
+                                    <div className={`prog-bar-fill ${gbg(epct)}`} style={{ width: `${epct}%` }}></div>
+                                </div>
+                            )}
                         </div>
                     );
                 })}

@@ -162,7 +162,7 @@ export default function TeacherProfile({ staff, reportData = [] }) {
                                                     const studentGrades = ass.grades.filter(g => g.student_id === student.id);
                                                     const totalScore = studentGrades.reduce((sum, g) => sum + parseFloat(g.score || 0), 0);
                                                     const totalPossible = ass.assessments.reduce((sum, a) => sum + parseFloat(a.full_mark), 0);
-                                                    const pct = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+                                                    const pct = totalPossible > 0 ? Math.min(Math.round((totalScore / totalPossible) * 100), 100) : 0;
 
                                                     return (
                                                         <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>

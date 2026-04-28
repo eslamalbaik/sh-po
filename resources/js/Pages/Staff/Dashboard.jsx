@@ -4,8 +4,17 @@ import axios from 'axios';
 import ActionConfirmModal from '@/Components/ActionConfirmModal';
 import PrintGradesModal from '@/Components/PrintGradesModal';
 
-export default function Dashboard({ staff = {}, assignments = [] }) {
-    const [selectedAssignment, setSelectedAssignment] = useState(assignments && assignments.length > 0 ? assignments[0] : null);
+import GroupCard from '@/Components/GroupCard';
+import AddGroupModal from '@/Components/AddGroupModal';
+
+export default function Dashboard({ staff = {}, subjects = [], assignments = [], groups = [], allSubjects = [], allStudents = [] }) {
+    // subjects from SubjectGroupResource is already unified — use it directly
+    // Fallback: build from raw assignments/groups if subjects not provided
+    // Use unified subjects from controller
+    const allTargets = subjects;
+
+    const [activeView, setActiveView] = useState('cards');
+    const [selectedAssignment, setSelectedAssignment] = useState(null);
     const [students, setStudents] = useState([]);
     const [assessments, setAssessments] = useState([]);
     const [grades, setGrades] = useState({});
@@ -14,26 +23,32 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAssess, setNewAssess] = useState({ note_ar: '', full_mark: 20, type: 'quiz' });
 
-    const [seconds, setSeconds] = useState(1800); // 30m
+    const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+    const [editingGroupForModal, setEditingGroupForModal] = useState(null);
+
+    const openAddGroup = () => { setEditingGroupForModal(null); setIsAddGroupOpen(true); };
+    const openEditGroup = (group) => { setEditingGroupForModal(group); setIsAddGroupOpen(true); };
+
+
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: 'warning', title: '', message: '', onConfirm: () => {} });
 
     // Grouping assignments by subject
     const uniqueSubjects = useMemo(() => {
         const subjects = [];
         const seenIds = new Set();
-        assignments.forEach(ass => {
+        allTargets.forEach(ass => {
             if (ass.subject && !seenIds.has(ass.subject.id)) {
                 subjects.push(ass.subject);
                 seenIds.add(ass.subject.id);
             }
         });
         return subjects;
-    }, [assignments]);
+    }, [allTargets]);
 
     const filteredSections = useMemo(() => {
         if (!selectedAssignment || !selectedAssignment.subject) return [];
-        return assignments.filter(ass => ass.subject_id === selectedAssignment.subject_id);
-    }, [assignments, selectedAssignment]);
+        return allTargets.filter(ass => ass.subject_id === selectedAssignment.subject_id);
+    }, [allTargets, selectedAssignment]);
 
 
     
@@ -48,9 +63,74 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
     // Language state
     const [lang, setLang] = useState(localStorage.getItem('staff_lang') || 'ar');
     const [isLangOpen, setIsLangOpen] = useState(false);
+    const isAr = lang === 'ar';
     useEffect(() => {
         localStorage.setItem('staff_lang', lang);
     }, [lang]);
+
+    // Group Management state
+    const [showEditStudentsModal, setShowEditStudentsModal] = useState(false);
+    const [editingGroup, setEditingGroup] = useState(null);
+    const [groupStudents, setGroupStudents] = useState([]);
+    const [allStudentsList, setAllStudentsList] = useState([]);
+    const [searchStudentQuery, setSearchStudentQuery] = useState('');
+
+    const handleDeleteGroup = (id) => {
+        setConfirmModal({
+            isOpen: true,
+            type: 'danger',
+            title: isAr ? 'تأكيد الحذف' : 'Confirm Delete',
+            message: isAr ? 'هل أنت متأكد من حذف هذه المجموعة؟' : 'Are you sure you want to delete this group?',
+            onConfirm: async () => {
+                try {
+                    setConfirmModal(f => ({ ...f, isOpen: false }));
+                    await axios.delete(route('staff.groups.destroy', id));
+                    router.reload();
+                } catch (err) {
+                    alert('Error deleting group');
+                }
+            },
+            onCancel: () => setConfirmModal(f => ({ ...f, isOpen: false }))
+        });
+    };
+
+    const handleEditStudents = async (group) => {
+        setEditingGroup(group);
+        setGroupStudents(group.students?.map(s => s.id) || []); // fallback, but we don't have students loaded in resource yet. Wait, we need to load group's students.
+        
+        // Fetch students for this group
+        try {
+            const resp = await axios.post(route('staff.get-grades'), { group_id: group.id, subject_id: group.subject_id });
+            setGroupStudents(resp.data.students.map(s => s.id));
+        } catch(e) {}
+
+        setShowEditStudentsModal(true);
+    };
+
+    const handleSaveGroupStudents = async () => {
+        try {
+            await axios.post(route('staff.groups.update-students', editingGroup.id), {
+                student_ids: groupStudents
+            });
+            setShowEditStudentsModal(false);
+            router.reload();
+        } catch (err) {
+            alert('Error updating students');
+        }
+    };
+
+    // search students for modal
+    useEffect(() => {
+        if (!showEditStudentsModal) return;
+        const fetchSt = async () => {
+            try {
+                const res = await axios.get(route('api.admin.students'), { params: { search: searchStudentQuery } });
+                setAllStudentsList(res.data.data || res.data); // depending on pagination
+            } catch (e) {}
+        };
+        fetchSt();
+    }, [showEditStudentsModal, searchStudentQuery]);
+
 
 
     const dict = {
@@ -172,50 +252,23 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
 
     const t = dict[lang] || dict.ar;
 
-    useEffect(() => {
-        // Persistent timer logic
-        const sessionKey = 'staff_session_end';
-        let endTime = sessionStorage.getItem(sessionKey);
-        
-        // Reset if no end time OR if the stored end time is already in the past
-        if (!endTime || parseInt(endTime) < Date.now()) {
-            endTime = Date.now() + 30 * 60 * 1000;
-            sessionStorage.setItem(sessionKey, endTime);
-        }
 
-        const tick = () => {
-            const now = Date.now();
-            const remain = Math.max(0, Math.floor((endTime - now) / 1000));
-            setSeconds(remain);
-            if (remain <= 0) {
-                clearInterval(timer);
-                logout();
-            }
-        };
 
-        const timer = setInterval(tick, 1000);
-        tick();
-        return () => clearInterval(timer);
-    }, []);
 
-    const formatTime = (s) => {
-        const mins = Math.floor(s / 60);
-        const secs = s % 60;
-        return `${mins}:${secs < 10 ? '0' + secs : secs}`;
-    };
 
     useEffect(() => {
-        if (selectedAssignment) {
+        if (selectedAssignment && activeView === 'grades') {
             loadData();
         }
-    }, [selectedAssignment]);
+    }, [selectedAssignment, activeView]);
 
     const loadData = async () => {
         setLoading(true);
         try {
             if (!selectedAssignment) return;
             const resp = await axios.post(route('staff.get-grades'), {
-                section_id: selectedAssignment.section_id,
+                section_id: selectedAssignment.type === 'section' ? selectedAssignment.section_id : null,
+                group_id: selectedAssignment.type === 'group' ? selectedAssignment.id : null,
                 subject_id: selectedAssignment.subject_id
             });
             setStudents(resp.data.students);
@@ -225,7 +278,7 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
             resp.data.grades.forEach(g => {
                 const sId = String(g.student_id).toLowerCase();
                 const aId = String(g.assessment_id).toLowerCase();
-                gradeMap[`${sId}_${aId}`] = g.score;
+                gradeMap[`${sId}_${aId}`] = { score: g.score, is_absent: !!g.is_absent };
             });
             setGrades(gradeMap);
         } catch (err) {
@@ -235,16 +288,17 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
         }
     };
 
-    const handleScoreChange = async (studentId, assessmentId, score) => {
+    const handleScoreChange = async (studentId, assessmentId, score, isAbsent = false) => {
         const key = `${studentId}_${assessmentId}`;
-        setGrades(prev => ({ ...prev, [key]: score }));
+        setGrades(prev => ({ ...prev, [key]: { score, is_absent: isAbsent } }));
         setSaving(prev => ({ ...prev, [key]: true }));
 
         try {
             await axios.post(route('staff.save-grade'), {
                 student_id: studentId,
                 assessment_id: assessmentId,
-                score: score === '' ? null : score
+                score: score === '' ? null : score,
+                is_absent: isAbsent
             });
         } catch (err) {
             console.error(err);
@@ -264,7 +318,8 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
         try {
             await axios.post(route('staff.store-assessment'), {
                 ...newAssess,
-                section_id: selectedAssignment.section_id,
+                section_id: selectedAssignment.type === 'section' ? selectedAssignment.section_id : null,
+                group_id: selectedAssignment.type === 'group' ? selectedAssignment.id : null,
                 subject_id: selectedAssignment.subject_id
             });
             setShowAddModal(false);
@@ -418,7 +473,7 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
             <header className="staff-header" style={{ background: '#fff', borderBottom: '1px solid #eee', padding: '15px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                     <button onClick={logout} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 15px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>{t.logout}</button>
-                    <div style={{ fontSize: '13px', color: '#64748b' }}>{t.session} {formatTime(seconds)}</div>
+
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         {/* Premium Language Dropdown */}
                         <div className="relative" onMouseLeave={() => setIsLangOpen(false)} style={{ position: 'relative' }}>
@@ -500,13 +555,62 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                 </div>
             </header>
 
-            <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+            <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px 20px' }}>
+                {activeView === 'cards' ? (
+                    <div>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-2xl font-bold text-slate-800">{isAr ? 'موادي الدراسية' : 'My Subjects'}</h2>
+                                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-sm font-bold border border-slate-200">
+                                    {allTargets.length}
+                                </span>
+                            </div>
+                            <button 
+                                onClick={openAddGroup}
+                                className="px-6 py-3 rounded-2xl bg-[#1c4c6e] text-white font-bold hover:shadow-lg transition-all flex items-center gap-2"
+                            >
+                                <span>➕</span>
+                                <span>{isAr ? 'إنشاء مجموعة جديدة' : 'Create New Group'}</span>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {allTargets.map((target) => (
+                                <GroupCard 
+                                    key={target.type + '-' + target.id}
+                                    item={target}
+                                    lang={lang}
+                                    onViewResults={(item) => {
+                                        setSelectedAssignment(item);
+                                        setActiveView('grades');
+                                    }}
+                                    onDelete={handleDeleteGroup}
+                                    onEditStudents={openEditGroup}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div className="mb-4">
+                            <button 
+                                onClick={() => setActiveView('cards')}
+                                className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                            >
+                                <span>{isAr ? '← العودة للمواد' : '← Back to Subjects'}</span>
+                            </button>
+                        </div>
                 {/* Actions Bar */}
                 <div className="actions-bar">
                     <div className="btns-group">
-                        <button className="p-btn btn-dark" onClick={() => setShowPrintModal(true)}>{t.print}</button>
-                        <button className="p-btn btn-green">{t.confirmUpload}</button>
-                        <button className="p-btn btn-indigo" onClick={() => setShowAddModal(true)}>{t.newAssess}</button>
+                        <button className="p-btn btn-dark" onClick={() => setShowPrintModal(true)}>
+                            <span>🖨️</span> {t.print}
+                        </button>
+                        <button className="p-btn btn-green">
+                            <span>✅</span> {t.confirmUpload}
+                        </button>
+                        <button className="p-btn btn-indigo" onClick={() => setShowAddModal(true)}>
+                            <span>➕</span> {t.newAssess}
+                        </button>
                     </div>
 
                     <div className="filters-group">
@@ -517,7 +621,7 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                                 value={selectedAssignment?.subject_id || ''} 
                                 onChange={(e) => {
                                     const subId = parseInt(e.target.value);
-                                    const firstAss = assignments.find(ass => ass.subject_id === subId);
+                                    const firstAss = allTargets.find(ass => ass.subject_id === subId);
                                     if (firstAss) setSelectedAssignment(firstAss);
                                 }}
                             >
@@ -532,15 +636,19 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                             <span className="f-label">{t.section}</span>
                             <select 
                                 className="f-select"
-                                value={selectedAssignment?.id || ''}
+                                value={selectedAssignment?.type === 'group' ? selectedAssignment.id : selectedAssignment?.id || ''}
                                 onChange={(e) => {
-                                    const assId = parseInt(e.target.value);
-                                    const found = assignments.find(ass => ass.id === assId);
+                                    const val = e.target.value;
+                                    const found = allTargets.find(ass => 
+                                        (ass.type === 'group' && ass.id === val) || 
+                                        (ass.type === 'section' && ass.id == val)
+                                    );
                                     if (found) setSelectedAssignment(found);
                                 }}
                             >
                                 {filteredSections.map((ass) => (
-                                    <option key={ass.id} value={ass.id}>
+                                    <option key={ass.type + (ass.id)} value={ass.id}>
+                                        {ass.type === 'group' ? '👥 ' : ''}
                                         {ass.section?.label_ar || (ass.section?.grade?.number + (ass.section?.letter || ''))}
                                     </option>
                                 ))}
@@ -599,7 +707,10 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                                                 const sId = String(std.id).toLowerCase();
                                                 const aId = String(ass.id).toLowerCase();
                                                 const key = `${sId}_${aId}`;
-                                                const score = grades[key];
+                                                const gradeObj = grades[key] || { score: null, is_absent: false };
+                                                const score = gradeObj.score;
+                                                const isAbsent = gradeObj.is_absent;
+                                                
                                                 if (score) rowTotal += parseFloat(score);
                                                 
                                                 return (
@@ -607,15 +718,15 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                                                         <input 
                                                             type="text"
                                                             lang="en"
-                                                            className={`score-input ${saving[key] ? 'saving-inp' : ''} ${!score && score !== 0 ? 'empty' : ''} ${score !== null && score !== '' && parseFloat(score) === 0 ? 'absent' : ''} ${score !== null && score !== '' && parseFloat(score) > 0 && parseFloat(score) <= 10 ? 'low' : ''}`}
-                                                            value={score === 0 || score === "0" ? 'A' : (score ?? '')}
+                                                            className={`score-input ${saving[key] ? 'saving-inp' : ''} ${(score === null || score === undefined) && !isAbsent ? 'empty' : ''} ${isAbsent ? 'absent' : ''} ${score !== null && score !== '' && parseFloat(score) >= 0 && parseFloat(score) < (ass.full_mark / 2) && !isAbsent ? 'low' : ''}`}
+                                                            value={isAbsent ? 'A' : (score ?? '')}
                                                             onChange={(e) => {
                                                                 const val = e.target.value;
                                                                 if (val.toUpperCase() === 'A') {
-                                                                    handleScoreChange(std.id, ass.id, 0);
+                                                                    handleScoreChange(std.id, ass.id, 0, true);
                                                                 } else if (val === '' || (!isNaN(val) && parseFloat(val) >= 0)) {
                                                                     if (val === '' || parseFloat(val) <= ass.full_mark) {
-                                                                        handleScoreChange(std.id, ass.id, val);
+                                                                        handleScoreChange(std.id, ass.id, val, false);
                                                                     }
                                                                 }
                                                             }}
@@ -634,7 +745,20 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                         </table>
                     )}
                 </div>
+                </>
+                )}
             </div>
+
+            <AddGroupModal 
+                isOpen={isAddGroupOpen}
+                onClose={() => setIsAddGroupOpen(false)}
+                staffList={[staff]}
+                subjects={allSubjects}
+                grades={[]} // not strictly needed for the picker if we have allSubjects
+                editingGroup={editingGroupForModal}
+                allStudents={allStudents}
+                initialStaffId={staff.id}
+            />
 
             {/* Add Assessment Modal */}
             {showAddModal && (
@@ -711,6 +835,55 @@ export default function Dashboard({ staff = {}, assignments = [] }) {
                     </div>
                 </div>
             )}
+
+            {/* Edit Group Students Modal */}
+            {showEditStudentsModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '600px', width: '100%' }}>
+                        <div className="modal-header">{isAr ? 'تعديل طلاب المجموعة' : 'Edit Group Students'}</div>
+                        <div className="modal-field">
+                            <input 
+                                type="text"
+                                className="modal-input mb-4" 
+                                placeholder={isAr ? 'بحث عن طالب...' : 'Search student...'}
+                                value={searchStudentQuery}
+                                onChange={e => setSearchStudentQuery(e.target.value)}
+                            />
+                            <div className="border border-slate-200 rounded-lg max-h-60 overflow-y-auto p-2">
+                                {allStudentsList.map(st => (
+                                    <div key={st.id} className="flex items-center justify-between p-2 hover:bg-slate-50 border-b border-slate-100 last:border-0">
+                                        <div>
+                                            <div className="font-bold text-sm">{isAr ? st.name_ar : st.name_en || st.name_ar}</div>
+                                            <div className="text-xs text-slate-500">{st.student_no}</div>
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                if (groupStudents.includes(st.id)) {
+                                                    setGroupStudents(groupStudents.filter(id => id !== st.id));
+                                                } else {
+                                                    setGroupStudents([...groupStudents, st.id]);
+                                                }
+                                            }}
+                                            className={`px-3 py-1 rounded text-xs font-bold ${groupStudents.includes(st.id) ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}
+                                        >
+                                            {groupStudents.includes(st.id) ? (isAr ? 'إزالة' : 'Remove') : (isAr ? 'إضافة' : 'Add')}
+                                        </button>
+                                    </div>
+                                ))}
+                                {allStudentsList.length === 0 && <div className="p-4 text-center text-slate-500 text-sm">لا يوجد نتائج</div>}
+                            </div>
+                        </div>
+                        <div className="mt-4 flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div className="text-sm font-bold text-slate-700">{isAr ? 'عدد الطلاب في المجموعة:' : 'Students in group:'} <span className="text-indigo-600">{groupStudents.length}</span></div>
+                        </div>
+                        <div className="modal-btns mt-6">
+                            <button className="p-btn btn-dark" onClick={() => setShowEditStudentsModal(false)}>{t.cancel}</button>
+                            <button className="p-btn btn-indigo" onClick={handleSaveGroupStudents}>{isAr ? 'حفظ التعديلات' : 'Save Changes'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <ActionConfirmModal 
                 {...confirmModal}
                 lang={lang}

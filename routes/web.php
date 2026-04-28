@@ -26,6 +26,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/store-assessment', [StaffPortalController::class, 'storeAssessment'])->name('staff.store-assessment');
     Route::delete('/delete-assessment/{id}', [StaffPortalController::class, 'deleteAssessment'])->name('staff.delete-assessment');
     Route::post('/staff/change-password', [StaffPortalController::class, 'updatePassword'])->name('staff.change-password');
+    Route::post('/staff/groups/{id}/students', [StaffPortalController::class, 'updateGroupStudents'])->name('staff.groups.update-students');
+    Route::delete('/staff/groups/{id}', [StaffPortalController::class, 'deleteGroup'])->name('staff.groups.destroy');
     
     // Admin: Staff & Subject Management
     Route::post('/admin/staff', [AdminPortalController::class, 'storeStaff'])->name('admin.staff.store');
@@ -46,12 +48,16 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/admin/students', [AdminPortalController::class, 'storeStudent'])->name('admin.students.store');
     Route::post('/admin/students/{id}/transfer', [AdminPortalController::class, 'transferStudent'])->name('admin.students.transfer');
     Route::post('/admin/students/{id}/archive', [AdminPortalController::class, 'archiveStudent'])->name('admin.students.archive');
+    Route::get('/admin/student/{id}/results', [AdminPortalController::class, 'viewStudentResults'])->name('admin.student-results');
     Route::get('/api/admin/students', [AdminPortalController::class, 'getStudentsAjax'])->name('api.admin.students');
 
     // Assignment Management
     Route::get('/api/admin/staff-assignments/{staffId}', [AdminPortalController::class, 'getStaffAssignmentsAjax'])->name('api.admin.staff-assignments');
     Route::post('/admin/assignments', [AdminPortalController::class, 'storeAssignment'])->name('admin.assignments.store');
-    Route::delete('/admin/assignments/{id}', [AdminPortalController::class, 'deleteAssignment'])->name('admin.assignments.destroy');
+    // Group Management
+    Route::post('/admin/groups', [AdminPortalController::class, 'storeGroup'])->name('admin.groups.store');
+    Route::put('/admin/groups/{id}', [AdminPortalController::class, 'updateGroup'])->name('admin.groups.update');
+    Route::delete('/admin/groups/{id}', [AdminPortalController::class, 'deleteGroup'])->name('admin.groups.destroy');
 });
 
 Route::get('/staff', function () {

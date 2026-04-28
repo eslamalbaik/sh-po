@@ -249,11 +249,11 @@ tailwind.config = {
   color: #fff !important;
 }
 
-.btn-indigo { background: #4f46e5 !important; }
-.btn-green { background: #10b981 !important; }
-.btn-dark { background: #334155 !important; }
+.btn-indigo { background: #1c4c6e !important; box-shadow: 0 4px 12px rgba(28, 76, 110, 0.25) !important; border: 1px solid rgba(255,255,255,0.1) !important; }
+.btn-green { background: #1D9E75 !important; box-shadow: 0 4px 12px rgba(29, 158, 117, 0.25) !important; border: 1px solid rgba(255,255,255,0.1) !important; }
+.btn-dark { background: #334155 !important; box-shadow: 0 4px 12px rgba(51, 65, 85, 0.15) !important; border: 1px solid rgba(255,255,255,0.1) !important; }
 
-.p-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.p-btn:hover { filter: brightness(1.15); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important; }
 
 /* ── GRADES TABLE ── */
 .table-viewport {
@@ -2610,6 +2610,139 @@ html[dir="ltr"] .rm-eye { right: 10px; }
 @keyframes bounce-subtle {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }
+}
+
+
+/* ── PREMIUM SUBJECT CARDS ── */
+.subj-list-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.subj-card-premium {
+  background: #fff !important;
+  border: 1px solid #eef2f6 !important;
+  border-radius: 24px !important;
+  padding: 24px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03) !important;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+  position: relative;
+}
+
+.subj-card-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06) !important;
+}
+
+.subj-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.subj-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #f8fafc !important;
+  border: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-left: 16px;
+}
+
+.subj-info-text {
+  flex: 1;
+  text-align: right;
+}
+
+.subj-info-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b !important;
+  margin: 0;
+}
+
+.subj-info-teacher {
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8 !important;
+  margin-top: 4px;
+}
+
+.pct-badge {
+  width: 70px;
+  height: 40px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pct-badge.g { background: #EAF3DE !important; color: #1D9E75 !important; }
+.pct-badge.b { background: #E6F1FB !important; color: #1F4E79 !important; }
+.pct-badge.a { background: #FFF2CC !important; color: #EF9F27 !important; }
+.pct-badge.r { background: #FCEBEB !important; color: #E24B4A !important; }
+
+.bar-track-premium {
+  height: 10px;
+  background: #f1f5f9 !important;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.bar-fill-premium {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.subj-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.score-display {
+  font-size: 14px;
+  font-weight: 700;
+  color: #64748b !important;
+}
+
+.score-current {
+  color: #1e293b !important;
+  font-size: 16px;
+}
+
+.eval-count-pill {
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 20px;
+}
+
+/* ── OVERVIEW BOXES FIX ── */
+.ov-box {
+  background: #fff !important;
+  border: 1px solid #eef2f6 !important;
+  border-radius: 16px !important;
+  padding: 18px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
+}
+
+.ov-val {
+  font-size: 26px !important;
+  color: #1F4E79 !important;
 }
 
 </style>
