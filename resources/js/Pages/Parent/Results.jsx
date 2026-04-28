@@ -90,19 +90,14 @@ export default function Results({ student, results = [], groups = [], isAdminVie
     const subjStats = subjects.map(s => {
         const entered = s.evals.filter(e => e.score !== null && e.score !== undefined && !e.is_absent);
         
-        // حساب مجموع النسب المئوية للتكليفات (بحد أقصى 5 تكليفات)
-        const totalPercentages = entered.slice(0, 5).reduce((sum, e) => {
-            const pct = e.full_mark > 0 ? (parseFloat(e.score) / e.full_mark) * 100 : 0;
-            return sum + pct;
-        }, 0);
-
-        // المتوسط النهائي (الدرجة النهائية) هو مجموع النسب مقسوماً على 5
-        const finalGrade = Math.round(totalPercentages / 5);
+        const totalScore = entered.reduce((sum, e) => sum + parseFloat(e.score || 0), 0);
+        const totalFull = entered.reduce((sum, e) => sum + (parseFloat(e.full_mark) || 0), 0);
+        const percentage = totalFull > 0 ? Math.round((totalScore / totalFull) * 100) : 0;
 
         return { 
-            tot: finalGrade, 
-            full: 100, 
-            pct: finalGrade, 
+            tot: Math.round(totalScore * 100) / 100, 
+            full: totalFull, 
+            pct: percentage, 
             hasScores: entered.length > 0, 
             count: entered.length 
         };

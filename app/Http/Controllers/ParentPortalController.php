@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
+use App\Models\StudentGrade;
+use App\Models\Assessment;
 use App\Models\StudentResultView;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ParentPortalController extends Controller

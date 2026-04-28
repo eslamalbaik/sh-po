@@ -107,37 +107,50 @@ class AdminPortalController extends Controller
 
     private function getTotalPerformanceRate()
     {
-        // حساب إجمالي التكليفات المسندة (الأقسام + المجموعات)
-        $assignmentCount = DB::table('teacher_assignments')->count();
-        $groupCount = DB::table('groups')->count();
+        $allStaff = Staff::all();
+        if ($allStaff->isEmpty()) return 0;
         
-        $totalExpected = ($assignmentCount + $groupCount) * 5;
-        
-        // حساب التكليفات التي تم رصد درجاتها بالفعل
-        $totalActual = \App\Models\Assessment::has('studentGrades')->count();
+        $sumPerformance = 0;
+        foreach ($allStaff as $staff) {
+            $sumPerformance += $this->getStaffPerformance($staff->id);
+        }
 
-        return $totalExpected > 0 ? min(round(($totalActual / $totalExpected) * 100), 100) : 0;
+        return round($sumPerformance / $allStaff->count());
     }
 
     private function getStaffPerformance($staffId)
     {
-        // حساب عدد المهام المسندة للمعلم (أقسام + مجموعات)
-        $assignmentCount = DB::table('teacher_assignments')
-            ->where('staff_id', $staffId)
-            ->count();
-            
-        $groupCount = DB::table('groups')
-            ->where('staff_id', $staffId)
-            ->count();
-            
-        $totalExpected = ($assignmentCount + $groupCount) * 5;
+        // 1. حساب إجمالي المدخلات المتوقعة (عدد الطلاب في كل تكليف * 5)
+        $assignments = TeacherAssignment::where('staff_id', $staffId)->get();
+        $groups = Group::where('staff_id', $staffId)->withCount('students')->get();
         
-        // حساب عدد التقييمات التي رصد المعلم درجاتها بالفعل
-        $totalActual = \App\Models\Assessment::where('staff_id', $staffId)
-            ->has('studentGrades')
+        $totalExpected = 0;
+        foreach ($assignments as $a) {
+            $studentCount = Student::where('section_id', $a->section_id)->where('is_active', true)->count();
+            
+            // تحقق إذا كان التكليف لطلاب محددين فقط (اختياري)
+            $electiveCount = DB::table('elective_students')->where('assignment_id', $a->id)->count();
+            if ($electiveCount > 0) {
+                $studentCount = $electiveCount;
+            }
+            
+            $totalExpected += $studentCount * 5;
+        }
+        
+        foreach ($groups as $g) {
+            $totalExpected += $g->students_count * 5;
+        }
+
+        if ($totalExpected === 0) return 0;
+
+        // 2. حساب عدد الدرجات الفعلية المرصودة المرتبطة بتقييمات هذا المعلم
+        $totalActual = StudentGrade::whereHas('assessment', function($q) use ($staffId) {
+                $q->where('staff_id', $staffId);
+            })
+            ->whereNotNull('score')
             ->count();
 
-        return $totalExpected > 0 ? min(round(($totalActual / $totalExpected) * 100), 100) : 0;
+        return min(round(($totalActual / $totalExpected) * 100), 100);
     }
 
     private function checkAssignmentData($sectionId, $subjectId)
@@ -197,13 +210,43 @@ class AdminPortalController extends Controller
         
         if ($allAssessments->count() === 0) return 0;
 
-        $totalScore = StudentGrade::where('student_id', $studentId)
+        $grades = StudentGrade::where('student_id', $studentId)
             ->whereIn('assessment_id', $allAssessments->pluck('id'))
-            ->sum('score');
-            
-        $totalPossible = $allAssessments->sum('full_mark');
+            ->where('is_absent', false)
+            ->whereNotNull('score')
+            ->get();
 
-        return $totalPossible > 0 ? min(round(($totalScore / $totalPossible) * 100), 100) : 0;
+        // تجميع التقييمات حسب المادة
+        $subjectAssessments = $allAssessments->groupBy('subject_id');
+        
+        $totalSubjectAverages = 0;
+        $subjectCount = 0;
+
+        foreach ($subjectAssessments as $subjectId => $assessments) {
+            $subjectCount++;
+            
+            // جلب الدرجات لهذه المادة وترتيبها (بحد أقصى 5 تكليفات)
+            $subjectGrades = $grades->whereIn('assessment_id', $assessments->pluck('id'))
+                ->sortBy('id')
+                ->take(5);
+            
+            $totalPercentages = 0;
+            foreach ($subjectGrades as $grade) {
+                $assessment = $assessments->where('id', $grade->assessment_id)->first();
+                if ($assessment && $assessment->full_mark > 0) {
+                    $totalPercentages += ($grade->score / $assessment->full_mark) * 100;
+                }
+            }
+            
+            // المتوسط لهذه المادة هو مجموع النسب مقسوماً على 5 (حسب القاعدة المطلوبة)
+            $subjectAvg = $totalPercentages / 5;
+            $totalSubjectAverages += $subjectAvg;
+        }
+
+        if ($subjectCount === 0) return 0;
+        
+        // الأداء النهائي هو متوسط متوسطات المواد
+        return min(round($totalSubjectAverages / $subjectCount), 100);
     }
 
     public function storeStudent(Request $request)
