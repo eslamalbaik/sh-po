@@ -307,11 +307,12 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
             });
         } catch (err) {
             console.error(err);
+            const msg = err.response?.data?.message || t.errSaveMsg;
             setConfirmModal({
                 isOpen: true,
                 type: 'danger',
                 title: t.errSaveTitle,
-                message: t.errSaveMsg,
+                message: msg,
                 onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
             });
         } finally {
@@ -345,11 +346,13 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                 onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
             });
         } catch (err) {
+            console.error(err);
+            const msg = err.response?.data?.message || t.errOpMsg;
             setConfirmModal({
                 isOpen: true,
                 type: 'danger',
                 title: t.errOpTitle,
-                message: t.errOpMsg,
+                message: msg,
                 onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
             });
         }

@@ -170,26 +170,32 @@ class StaffPortalController extends Controller
      */
     public function saveGrade(Request $request)
     {
-        $request->validate([
-            'assessment_id' => 'required',
-            'student_id'    => 'required',
-            'score'         => 'nullable|numeric',
-            'is_absent'     => 'nullable|boolean',
-        ]);
+        try {
+            $request->validate([
+                'assessment_id' => 'required',
+                'student_id'    => 'required',
+                'score'         => 'nullable|numeric',
+                'is_absent'     => 'nullable|boolean',
+            ]);
 
-        StudentGrade::updateOrInsert(
-            [
-                'assessment_id' => $request->assessment_id,
-                'student_id'    => $request->student_id,
-            ],
-            [
-                'score'      => $request->score,
-                'is_absent'  => $request->is_absent ?? 0,
-                'updated_at' => now(),
-            ]
-        );
+            StudentGrade::updateOrCreate(
+                [
+                    'assessment_id' => $request->assessment_id,
+                    'student_id'    => $request->student_id,
+                ],
+                [
+                    'score'      => $request->score,
+                    'is_absent'  => $request->is_absent ?? 0,
+                ]
+            );
 
-        return response()->json(['status' => 'success']);
+            return response()->json(['status' => 'success']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -197,37 +203,44 @@ class StaffPortalController extends Controller
      */
     public function storeAssessment(Request $request)
     {
-        $request->validate([
-            'section_id' => 'nullable|exists:sections,id',
-            'group_id'   => 'nullable|exists:groups,id',
-            'subject_id' => 'required|exists:subjects,id',
-            'note_ar'    => 'required|string',
-            'full_mark'  => 'required|numeric',
-            'type'       => 'nullable|string',
-        ]);
+        try {
+            $request->validate([
+                'section_id' => 'nullable|exists:sections,id',
+                'group_id'   => 'nullable|exists:groups,id',
+                'subject_id' => 'required|exists:subjects,id',
+                'note_ar'    => 'required|string',
+                'full_mark'  => 'required|numeric',
+                'type'       => 'nullable|string',
+            ]);
 
-        $staff = Auth::user()->staff;
-        if (!$staff) {
-            return response()->json(['status' => 'error', 'message' => 'لم يتم العثور على ملف الموظف الخاص بك في النظام. يرجى مراجعة الإدارة.'], 403);
+            $staff = Auth::user()->staff;
+            if (!$staff) {
+                return response()->json(['status' => 'error', 'message' => 'لم يتم العثور على ملف الموظف الخاص بك في النظام. يرجى مراجعة الإدارة.'], 403);
+            }
+
+            // Use requested type directly to support custom types, fallback to exam
+            $dbType = $request->type ? $request->type : 'exam';
+
+            Assessment::create([
+                'section_id' => $request->section_id,
+                'group_id'   => $request->group_id,
+                'subject_id' => $request->subject_id,
+                'staff_id'   => $staff->id,
+                'note_ar'    => $request->note_ar,
+                'note_en'    => $request->note_ar, // Use same for en by default
+                'full_mark'  => $request->full_mark,
+                'type'       => $dbType,
+                'status'     => 'published',
+                'published_at' => now(),
+            ]);
+
+            return response()->json(['status' => 'success']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        // Use requested type directly to support custom types, fallback to exam
-        $dbType = $request->type ? $request->type : 'exam';
-
-
-        Assessment::create([
-            'section_id' => $request->section_id,
-            'group_id'   => $request->group_id,
-            'subject_id' => $request->subject_id,
-            'staff_id'   => $staff->id,
-            'note_ar'    => $request->note_ar,
-            'full_mark'  => $request->full_mark,
-            'type'       => $dbType,
-            'status'     => 'published',
-            'published_at' => now(),
-        ]);
-
-        return response()->json(['status' => 'success']);
     }
 
     /**
