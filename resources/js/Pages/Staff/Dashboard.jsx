@@ -21,6 +21,7 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState({});
     const [showAddModal, setShowAddModal] = useState(false);
+    const [editingAssessment, setEditingAssessment] = useState(null);
     const [newAssess, setNewAssess] = useState({ note_ar: '', full_mark: 20, type: 'quiz' });
 
     const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
@@ -154,11 +155,13 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
             total: "المجموع",
             fullMark: "الدرجة الكاملة:",
             addAssessTitle: "إضافة تقييم جديد",
+            editAssessTitle: "تعديل بيانات التقييم",
             assessNameLbl: "اسم التقييم (مثلاً: الاختبار التكويني الأول)",
             fullMarkLbl: "الدرجة الكاملة",
             assessTypeLbl: "نوع التقييم",
             cancel: "إلغاء",
             add: "إضافة",
+            save: "حفظ",
             confirm: "تأكيد",
             close: "إغلاق",
             changePassTitle: "تغيير كلمة السر",
@@ -211,11 +214,13 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
             total: "Total",
             fullMark: "Full Mark:",
             addAssessTitle: "Add New Assessment",
+            editAssessTitle: "Edit Assessment Details",
             assessNameLbl: "Assessment Name (e.g., Quiz 1)",
             fullMarkLbl: "Full Mark",
             assessTypeLbl: "Assessment Type",
             cancel: "Cancel",
             add: "Add",
+            save: "Save",
             confirm: "Confirm",
             close: "Close",
             changePassTitle: "Change Password",
@@ -316,20 +321,27 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
 
     const handleAddAssessment = async () => {
         try {
-            await axios.post(route('staff.store-assessment'), {
-                ...newAssess,
-                section_id: selectedAssignment.type === 'section' ? selectedAssignment.section_id : null,
-                group_id: selectedAssignment.type === 'group' ? selectedAssignment.id : null,
-                subject_id: selectedAssignment.subject_id
-            });
+            if (editingAssessment) {
+                await axios.post(route('staff.update-assessment', editingAssessment.id), {
+                    ...newAssess
+                });
+            } else {
+                await axios.post(route('staff.store-assessment'), {
+                    ...newAssess,
+                    section_id: selectedAssignment.type === 'section' ? selectedAssignment.section_id : null,
+                    group_id: selectedAssignment.type === 'group' ? selectedAssignment.id : null,
+                    subject_id: selectedAssignment.subject_id
+                });
+            }
             setShowAddModal(false);
+            setEditingAssessment(null);
             setNewAssess({ note_ar: '', full_mark: 20, type: 'quiz' });
             loadData();
             setConfirmModal({
                 isOpen: true,
                 type: 'success',
                 title: t.successTitle,
-                message: t.successMsg,
+                message: editingAssessment ? (isAr ? 'تم تحديث التقييم بنجاح.' : 'Assessment updated successfully.') : t.successMsg,
                 onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
             });
         } catch (err) {
@@ -341,6 +353,16 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                 onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
             });
         }
+    };
+
+    const handleEditAssessment = (ass) => {
+        setEditingAssessment(ass);
+        setNewAssess({
+            note_ar: ass.note_ar,
+            full_mark: ass.full_mark,
+            type: ass.type
+        });
+        setShowAddModal(true);
     };
 
     const handleDeleteAssessment = (id) => {
@@ -605,12 +627,18 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                         <button className="p-btn btn-dark" onClick={() => setShowPrintModal(true)}>
                             <span>🖨️</span> {t.print}
                         </button>
-                        <button className="p-btn btn-green">
-                            <span>✅</span> {t.confirmUpload}
-                        </button>
                         <button className="p-btn btn-indigo" onClick={() => setShowAddModal(true)}>
                             <span>➕</span> {t.newAssess}
                         </button>
+                        {Object.values(saving).some(v => v) && (
+                            <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full flex items-center gap-2">
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                {t.saving}
+                            </span>
+                        )}
                     </div>
 
                     <div className="filters-group">
@@ -685,7 +713,7 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                             <div style={{ fontSize: '10px', opacity: 0.6 }}>{t.fullMark} {ass.full_mark}</div>
                                             <div className="ass-controls">
                                                 <button className="ass-icon-btn trash" onClick={() => handleDeleteAssessment(ass.id)}>🗑️</button>
-                                                <button className="ass-icon-btn edit">✍️</button>
+                                                <button className="ass-icon-btn edit" onClick={() => handleEditAssessment(ass)}>✍️</button>
                                             </div>
                                         </th>
                                     ))}
@@ -721,6 +749,17 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                                             className={`score-input ${saving[key] ? 'saving-inp' : ''} ${(score === null || score === undefined) && !isAbsent ? 'empty' : ''} ${isAbsent ? 'absent' : ''} ${score !== null && score !== '' && parseFloat(score) >= 0 && parseFloat(score) < (ass.full_mark / 2) && !isAbsent ? 'low' : ''}`}
                                                             value={isAbsent ? 'A' : (score ?? '')}
                                                             onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const key = `${sId}_${aId}`;
+                                                                if (val.toUpperCase() === 'A') {
+                                                                    setGrades(prev => ({ ...prev, [key]: { score: 0, is_absent: true } }));
+                                                                } else if (val === '' || (!isNaN(val) && parseFloat(val) >= 0)) {
+                                                                    if (val === '' || parseFloat(val) <= ass.full_mark) {
+                                                                        setGrades(prev => ({ ...prev, [key]: { score: val, is_absent: false } }));
+                                                                    }
+                                                                }
+                                                            }}
+                                                            onBlur={(e) => {
                                                                 const val = e.target.value;
                                                                 if (val.toUpperCase() === 'A') {
                                                                     handleScoreChange(std.id, ass.id, 0, true);
@@ -764,7 +803,7 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
             {showAddModal && (
                 <div className="modal-overlay">
                     <div className="modal-content">
-                        <div className="modal-header">{t.addAssessTitle}</div>
+                        <div className="modal-header">{editingAssessment ? t.editAssessTitle : t.addAssessTitle}</div>
                         <div className="modal-field">
                             <label>{t.assessNameLbl}</label>
                             <input 
@@ -784,20 +823,23 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                         </div>
                         <div className="modal-field">
                             <label>{t.assessTypeLbl}</label>
-                            <select 
+                            <input 
+                                list="assessment-types"
                                 className="modal-input" 
                                 value={newAssess.type} 
                                 onChange={e => setNewAssess({...newAssess, type: e.target.value})}
-                            >
+                                placeholder={t.assessTypeLbl}
+                            />
+                            <datalist id="assessment-types">
                                 <option value="quiz">{t.types.quiz}</option>
                                 <option value="formative">{t.types.formative}</option>
                                 <option value="project">{t.types.project}</option>
                                 <option value="homework">{t.types.homework}</option>
-                            </select>
+                            </datalist>
                         </div>
                         <div className="modal-btns">
-                            <button className="p-btn btn-dark" onClick={() => setShowAddModal(false)}>{t.cancel}</button>
-                            <button className="p-btn btn-indigo" onClick={handleAddAssessment}>{t.add}</button>
+                            <button className="p-btn btn-dark" onClick={() => { setShowAddModal(false); setEditingAssessment(null); setNewAssess({ note_ar: '', full_mark: 20, type: 'quiz' }); }}>{t.cancel}</button>
+                            <button className="p-btn btn-indigo" onClick={handleAddAssessment}>{editingAssessment ? t.save : t.add}</button>
                         </div>
                     </div>
                 </div>

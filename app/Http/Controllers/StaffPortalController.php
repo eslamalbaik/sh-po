@@ -211,9 +211,8 @@ class StaffPortalController extends Controller
             return response()->json(['status' => 'error', 'message' => 'لم يتم العثور على ملف الموظف الخاص بك في النظام. يرجى مراجعة الإدارة.'], 403);
         }
 
-        // Use direct type if valid, otherwise fallback
-        $allowedTypes = ['exam', 'task', 'quiz', 'project', 'oral', 'formative', 'homework'];
-        $dbType = in_array($request->type, $allowedTypes) ? $request->type : 'exam';
+        // Use requested type directly to support custom types, fallback to exam
+        $dbType = $request->type ? $request->type : 'exam';
 
 
         Assessment::create([
@@ -226,6 +225,32 @@ class StaffPortalController extends Controller
             'type'       => $dbType,
             'status'     => 'published',
             'published_at' => now(),
+        ]);
+
+        return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * تحديث تقييم موجود
+     */
+    public function updateAssessment(Request $request, $id)
+    {
+        $request->validate([
+            'note_ar'    => 'required|string',
+            'full_mark'  => 'required|numeric',
+            'type'       => 'nullable|string',
+        ]);
+
+        $assessment = Assessment::findOrFail($id);
+        
+        if ($assessment->staff_id !== Auth::user()->staff->id) {
+            return response()->json(['status' => 'error', 'message' => 'عذراً، ليس لديك الصلاحية للقيام بهذا الإجراء.'], 403);
+        }
+
+        $assessment->update([
+            'note_ar'   => $request->note_ar,
+            'full_mark' => $request->full_mark,
+            'type'      => $request->type ?? $assessment->type,
         ]);
 
         return response()->json(['status' => 'success']);

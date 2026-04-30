@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Head, router, useForm, Link } from '@inertiajs/react';
 import GlobalSearch from '@/Components/GlobalSearch';
 import DebouncedSearchInput from '@/Components/DebouncedSearchInput';
-import AddStudentModal from '@/Components/AddStudentModal';
-import AddStaffModal from '@/Components/AddStaffModal';
-import AddSubjectModal from '@/Components/AddSubjectModal';
-import AddGroupModal from '@/Components/AddGroupModal';
-import TransferStudentModal from '@/Components/TransferStudentModal';
-import ActionConfirmModal from '@/Components/ActionConfirmModal';
 import axios from 'axios';
+
+const AddStudentModal = React.lazy(() => import('@/Components/AddStudentModal'));
+const AddStaffModal = React.lazy(() => import('@/Components/AddStaffModal'));
+const AddSubjectModal = React.lazy(() => import('@/Components/AddSubjectModal'));
+const AddGroupModal = React.lazy(() => import('@/Components/AddGroupModal'));
+const TransferStudentModal = React.lazy(() => import('@/Components/TransferStudentModal'));
+const ActionConfirmModal = React.lazy(() => import('@/Components/ActionConfirmModal'));
 export default function Dashboard({
     stats = {},
     reports = [],
@@ -1343,58 +1344,60 @@ export default function Dashboard({
             )}
 
             {/* Teacher Modals */}
-            <AddStaffModal 
-                isOpen={isAddStaffOpen} 
-                onClose={() => { setIsAddStaffOpen(false); setSelectedStaffForEdit(null); }}
-                lang={lang}
-                staff={selectedStaffForEdit}
-            />
-            <AddStudentModal 
-                isOpen={isAddModalOpen} 
-                onClose={() => setIsAddModalOpen(false)}
-                grades={all_grades}
-                sections={all_sections}
-                lang={lang}
-            />
-            <AddSubjectModal 
-                isOpen={isAddSubjectOpen} 
-                onClose={() => setIsAddSubjectOpen(false)}
-                lang={lang}
-            />
+            <Suspense fallback={null}>
+                <AddStaffModal 
+                    isOpen={isAddStaffOpen} 
+                    onClose={() => { setIsAddStaffOpen(false); setSelectedStaffForEdit(null); }}
+                    lang={lang}
+                    staff={selectedStaffForEdit}
+                />
+                <AddStudentModal 
+                    isOpen={isAddModalOpen} 
+                    onClose={() => setIsAddModalOpen(false)}
+                    grades={all_grades}
+                    sections={all_sections}
+                    lang={lang}
+                />
+                <AddSubjectModal 
+                    isOpen={isAddSubjectOpen} 
+                    onClose={() => setIsAddSubjectOpen(false)}
+                    lang={lang}
+                />
 
-            <TransferStudentModal
-                student={selectedStudent}
-                isOpen={isTransferModalOpen}
-                onClose={() => setIsTransferModalOpen(false)}
-                grades={all_grades}
-                sections={all_sections}
-                lang={lang}
-            />
+                <TransferStudentModal
+                    student={selectedStudent}
+                    isOpen={isTransferModalOpen}
+                    onClose={() => setIsTransferModalOpen(false)}
+                    grades={all_grades}
+                    sections={all_sections}
+                    lang={lang}
+                />
 
-            <ActionConfirmModal
-                isOpen={confirmModal.isOpen}
-                title={confirmModal.title}
-                message={confirmModal.message}
-                type={confirmModal.type}
-                lang={lang}
-                onConfirm={() => {
-                    if (confirmModal.action === 'delete_staff') performDeleteStaff();
-                    else if (confirmModal.action === 'delete_group') performDeleteGroup();
-                    else if (confirmModal.type === 'danger') performDeleteAssignment();
-                    else confirmArchive();
-                }}
-                onCancel={() => setConfirmModal(f => ({ ...f, isOpen: false }))}
-            />
+                <ActionConfirmModal
+                    isOpen={confirmModal.isOpen}
+                    title={confirmModal.title}
+                    message={confirmModal.message}
+                    type={confirmModal.type}
+                    lang={lang}
+                    onConfirm={() => {
+                        if (confirmModal.action === 'delete_staff') performDeleteStaff();
+                        else if (confirmModal.action === 'delete_group') performDeleteGroup();
+                        else if (confirmModal.type === 'danger') performDeleteAssignment();
+                        else confirmArchive();
+                    }}
+                    onCancel={() => setConfirmModal(f => ({ ...f, isOpen: false }))}
+                />
 
-            <AddGroupModal 
-                isOpen={isAddGroupOpen}
-                onClose={() => { setIsAddGroupOpen(false); setEditingGroup(null); }}
-                grades={all_grades}
-                subjects={all_subjects}
-                teachers={all_teachers_list}
-                lang={lang}
-                editGroup={editingGroup}
-            />
+                <AddGroupModal 
+                    isOpen={isAddGroupOpen}
+                    onClose={() => { setIsAddGroupOpen(false); setEditingGroup(null); }}
+                    grades={all_grades}
+                    subjects={all_subjects}
+                    teachers={all_teachers_list}
+                    lang={lang}
+                    editGroup={editingGroup}
+                />
+            </Suspense>
             
             {/* Admin Self Reset Modal */}
             {isAdminResetOpen && (

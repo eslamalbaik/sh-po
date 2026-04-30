@@ -107,9 +107,9 @@ export default function Login() {
                         </form>
 
                         <div className="sec-badge">
-                            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-                                <path d="M10 2L3 6v5c0 4 3.5 7.5 7 8.5C13.5 18.5 17 15 17 11V6L10 2z" stroke="#1D9E75" strokeWidth="1.5"/>
-                                <path d="M7 10l2 2 4-4" stroke="#1D9E75" strokeWidth="1.5" strokeLinecap="round"/>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                <path d="M9 12l2 2 4-4"></path>
                             </svg>
                             <span>{labels.secure}</span>
                         </div>
