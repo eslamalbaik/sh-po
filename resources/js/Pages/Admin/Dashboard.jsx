@@ -262,7 +262,10 @@ export default function Dashboard({
         });
     };
 
-    const logout = () => router.post(route('logout'));
+    const logout = () => {
+        localStorage.removeItem('admin_session_end');
+        router.get(route('logout'));
+    };
 
     const filteredReports = (reports.data || []).filter(r => {
         const matchesSearch = r.name_ar.includes(search) || (r.name_en && r.name_en.toLowerCase().includes(search.toLowerCase()));

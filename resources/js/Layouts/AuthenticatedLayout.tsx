@@ -32,120 +32,91 @@ export default function Authenticated({
     const t = dict[lang as keyof typeof dict] || dict.ar;
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-            <nav className="border-b border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+            <nav className="sticky top-0 z-50 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div className="flex h-16 justify-between">
-                        <div className="flex">
-                            <div className="flex shrink-0 items-center">
-                                <Link href="/">
-                                    <ApplicationLogo className="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
-                                </Link>
-                            </div>
+                    <div className="flex h-16 justify-between items-center">
+                        <div className="flex items-center">
+                            <Link href="/" className="flex-shrink-0 transition-transform hover:scale-105">
+                                <ApplicationLogo className="h-10 w-auto fill-current text-indigo-600 dark:text-indigo-400" />
+                            </Link>
 
-                            <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex gap-4">
+                            <div className="hidden lg:ms-10 lg:flex lg:space-x-8 lg:space-x-reverse gap-2">
                                 <NavLink
                                     href={route('dashboard')}
                                     active={route().current('dashboard')}
+                                    className="text-sm font-bold"
                                 >
                                     {t.dashboard}
                                 </NavLink>
                             </div>
                         </div>
 
-                        <div className="hidden sm:ms-6 sm:flex sm:items-center gap-4">
-                            {/* Language Switcher in Nav */}
-                            <div className="flex gap-2 text-xs font-bold">
+                        <div className="hidden lg:flex lg:items-center lg:ms-6 gap-6">
+                            {/* Language Switcher */}
+                            <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-xl shadow-inner">
                                 <button 
                                     onClick={() => setLang('ar')} 
-                                    className={`px-2 py-1 rounded ${lang === 'ar' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                                >ع</button>
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${lang === 'ar' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >AR</button>
                                 <button 
                                     onClick={() => setLang('en')} 
-                                    className={`px-2 py-1 rounded ${lang === 'en' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${lang === 'en' ? 'bg-white dark:bg-slate-600 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                 >EN</button>
                             </div>
 
                             <div className="relative ms-3">
                                 <Dropdown>
                                     <Dropdown.Trigger>
-                                        <span className="inline-flex rounded-md">
-                                            <button
-                                                type="button"
-                                                className="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
-                                            >
+                                        <button className="flex items-center gap-2 p-1 pr-3 rounded-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 transition-all group">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold text-xs uppercase shadow-sm">
+                                                {user.name.charAt(0)}
+                                            </div>
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 transition-colors">
                                                 {user.name}
-
-                                                <svg
-                                                    className="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fillRule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clipRule="evenodd"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        </span>
+                                            </span>
+                                            <svg className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                                        </button>
                                     </Dropdown.Trigger>
 
                                     <Dropdown.Content>
-                                        <Dropdown.Link
-                                            href={route('profile.edit')}
-                                        >
-                                            {t.profile}
+                                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t.profile}</p>
+                                            <p className="text-sm font-black text-slate-700 dark:text-slate-200 truncate">{user.email}</p>
+                                        </div>
+                                        <Dropdown.Link href={route('profile.edit')} className="flex items-center gap-2 font-bold py-2.5">
+                                            <span>👤</span> {t.profile}
                                         </Dropdown.Link>
-                                        <Dropdown.Link
-                                            href={route('logout')}
-                                            method="post"
-                                            as="button"
-                                        >
-                                            {t.logout}
+                                        <Dropdown.Link href={route('logout')} method="get" as="button" className="flex items-center gap-2 font-bold py-2.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+                                            <span>🚪</span> {t.logout}
                                         </Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
                             </div>
                         </div>
 
-                        <div className="-me-2 flex items-center sm:hidden">
-                            <button
-                                onClick={() =>
-                                    setShowingNavigationDropdown(
-                                        (previousState) => !previousState,
-                                    )
-                                }
-                                className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-400 dark:focus:bg-gray-900 dark:focus:text-gray-400"
+                        {/* Mobile Menu Button */}
+                        <div className="flex items-center lg:hidden gap-3">
+                            {/* Mobile Lang Toggle */}
+                            <button 
+                                onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-[10px] font-black text-slate-600 dark:text-slate-300"
                             >
-                                <svg
-                                    className="h-6 w-6"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        className={
-                                            !showingNavigationDropdown
-                                                ? 'inline-flex'
-                                                : 'hidden'
-                                        }
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M4 6h16M4 12h16M4 18h16"
+                                {lang === 'ar' ? 'EN' : 'AR'}
+                            </button>
+
+                            <button
+                                onClick={() => setShowingNavigationDropdown(!showingNavigationDropdown)}
+                                className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all focus:ring-2 focus:ring-indigo-500"
+                            >
+                                <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                                    <path 
+                                        className={!showingNavigationDropdown ? 'inline-flex' : 'hidden'} 
+                                        strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" 
                                     />
-                                    <path
-                                        className={
-                                            showingNavigationDropdown
-                                                ? 'inline-flex'
-                                                : 'hidden'
-                                        }
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M6 18L18 6M6 6l12 12"
+                                    <path 
+                                        className={showingNavigationDropdown ? 'inline-flex' : 'hidden'} 
+                                        strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" 
                                     />
                                 </svg>
                             </button>
@@ -153,40 +124,22 @@ export default function Authenticated({
                     </div>
                 </div>
 
-                <div
-                    className={
-                        (showingNavigationDropdown ? 'block' : 'hidden') +
-                        ' sm:hidden'
-                    }
-                >
-                    <div className="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            href={route('dashboard')}
-                            active={route().current('dashboard')}
-                        >
+                {/* Mobile Sidebar / Drawer */}
+                <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out border-t border-slate-100 dark:border-slate-700 ${showingNavigationDropdown ? 'max-h-96' : 'max-h-0'}`}>
+                    <div className="px-4 py-6 space-y-2 bg-white dark:bg-slate-800 shadow-inner">
+                        <ResponsiveNavLink href={route('dashboard')} active={route().current('dashboard')} className="rounded-xl">
                             {t.dashboard}
                         </ResponsiveNavLink>
-                    </div>
-
-                    <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
-                        <div className="px-4">
-                            <div className="text-base font-medium text-gray-800 dark:text-gray-200">
-                                {user.name}
+                        
+                        <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-700">
+                            <div className="px-4 mb-4">
+                                <p className="text-sm font-black text-slate-800 dark:text-slate-200">{user.name}</p>
+                                <p className="text-xs font-bold text-slate-500">{user.email}</p>
                             </div>
-                            <div className="text-sm font-medium text-gray-500">
-                                {user.email}
-                            </div>
-                        </div>
-
-                        <div className="mt-3 space-y-1">
-                            <ResponsiveNavLink href={route('profile.edit')}>
+                            <ResponsiveNavLink href={route('profile.edit')} className="rounded-xl">
                                 {t.profile}
                             </ResponsiveNavLink>
-                            <ResponsiveNavLink
-                                method="post"
-                                href={route('logout')}
-                                as="button"
-                            >
+                            <ResponsiveNavLink method="get" href={route('logout')} as="button" className="rounded-xl text-rose-600 font-black">
                                 {t.logout}
                             </ResponsiveNavLink>
                         </div>
@@ -195,15 +148,18 @@ export default function Authenticated({
             </nav>
 
             {header && (
-                <header className="bg-white shadow dark:bg-gray-800">
+                <header className="bg-white dark:bg-slate-800 shadow-sm border-b border-slate-100 dark:border-slate-700">
                     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                         {header}
                     </div>
                 </header>
             )}
 
-            <main>{children}</main>
+            <main className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                {children}
+            </main>
         </div>
     );
+
 }
 

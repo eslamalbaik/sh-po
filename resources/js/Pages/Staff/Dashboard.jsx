@@ -484,7 +484,7 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
 
     const logout = () => {
         sessionStorage.removeItem('staff_session_end');
-        router.post(route('logout'));
+        router.get(route('logout'));
     };
 
     return (

@@ -44,7 +44,7 @@ export default function GlobalSearch({ onSelect, placeholder = "بحث عن مع
                     const response = await axios.get('/api/admin/global-search', {
                         params: { query: cleanQuery }
                     });
-                    
+
                     const data = response.data;
                     const combinedResults: SearchResult[] = [];
 
