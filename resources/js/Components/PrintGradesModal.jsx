@@ -19,11 +19,16 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
             let hasAnyGrade = false;
 
             assessments.forEach(a => {
-                const scoreStr = grades[`${s.id}_${a.id}`];
-                if (scoreStr !== undefined && scoreStr !== null && scoreStr !== '') {
-                    const numScore = parseFloat(scoreStr);
-                    studentTotal += numScore;
-                    hasAnyGrade = true;
+                const sId = String(s.id).toLowerCase();
+                const aId = String(a.id).toLowerCase();
+                const gradeObj = grades[`${sId}_${aId}`];
+                
+                if (gradeObj && gradeObj.score !== undefined && gradeObj.score !== null && gradeObj.score !== '') {
+                    const numScore = parseFloat(gradeObj.score);
+                    if (!isNaN(numScore)) {
+                        studentTotal += numScore;
+                        hasAnyGrade = true;
+                    }
                 }
             });
 
@@ -41,7 +46,7 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
         return {
             total: students.length,
             entered: entriesCount,
-            avg: overallAvg + '%',
+            avg: (isNaN(overallAvg) ? 0 : overallAvg) + '%',
             passed: `${successCount} / ${students.length}`
         };
     }, [students, assessments, grades]);
@@ -245,13 +250,20 @@ export default function PrintGradesModal({ isOpen, onClose, staff, selectedAssig
                                     <td className="std-name-cell">{idx + 1}. {lang === 'ar' ? std.name_ar : std.name_en || std.name_ar}</td>
                                     <td>{std.student_no}</td>
                                     {assessments.map(ass => {
-                                        const score = grades[`${std.id}_${ass.id}`];
+                                        const sId = String(std.id).toLowerCase();
+                                        const aId = String(ass.id).toLowerCase();
+                                        const key = `${sId}_${aId}`;
+                                        const gradeObj = grades[key];
+                                        
+                                        const score = gradeObj ? gradeObj.score : null;
+                                        const isAbsent = gradeObj ? gradeObj.is_absent : false;
                                         const numScore = parseFloat(score);
+                                        
                                         if (!isNaN(numScore)) rowTotal += numScore;
                                         
                                         return (
-                                            <td key={ass.id} className={score === undefined || score === null || score === '' ? 'score-nan' : 'score-val'}>
-                                                {score === undefined || score === null || score === '' ? '—' : (numScore === 0 ? 'A' : numScore)}
+                                            <td key={ass.id} className={(!gradeObj || (score === '' && !isAbsent)) ? 'score-nan' : 'score-val'}>
+                                                {isAbsent ? 'A' : (score === undefined || score === null || score === '' ? '—' : numScore)}
                                             </td>
                                         );
                                     })}
