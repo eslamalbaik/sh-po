@@ -282,88 +282,21 @@ export default function Dashboard({
         return true;
     });
 
-    // Flatten data for Global Search
-    const searchIndex = React.useMemo(() => {
-        const index = [];
-        
-        // Add ALL teachers for global search
-        if (all_teachers_list && Array.isArray(all_teachers_list)) {
-            all_teachers_list.forEach(teacher => {
-                index.push({
-                    type: 'Teacher',
-                    name: teacher.name_ar || teacher.name_en || 'بدون اسم',
-                    id: teacher.id,
-                    subtext: lang === 'ar' ? 'معلم' : 'Teacher'
-                });
-            });
-        }
-
-        // Add subjects and classes from current page reports
-        if (reports && Array.isArray(reports.data)) {
-            reports.data.forEach(teacher => {
-                const teacherName = teacher.name_ar || teacher.name_en || 'بدون اسم';
-                
-                (teacher.assignments || []).forEach(ass => {
-                const subjName = ass.label || (lang === 'ar' ? ass.label_ar : ass.label_en) || ass.subject_id || 'مادة غير معروفة';
-                const className = ass.section_name || 'شعبة غير معروفة';
-                
-                // Unique identifying keys
-                const subjId = `t${teacher.id}-sub-${ass.subject_id}-${ass.section_id}-${ass.group_id || ''}`;
-                const classId = `t${teacher.id}-cls-${ass.section_id}-${ass.subject_id}-${ass.group_id || ''}`;
-
-                index.push({
-                    type: 'Subject',
-                    name: subjName,
-                    id: subjId,
-                    subtext: `بواسطة ${teacherName} — ${className}`,
-                    payload: { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1, group_id: ass.group_id }
-                });
-
-                index.push({
-                    type: 'Class',
-                    name: className,
-                    id: classId,
-                    subtext: `بواسطة ${teacherName} — ${subjName}`,
-                    payload: { staffId: teacher.id, sectionId: ass.section_id || 1, subjectId: ass.subject_id || 1, group_id: ass.group_id }
-                });
-            });
-        });
-    }
-        // Add Students
-        if (students_list && Array.isArray(students_list)) {
-            students_list.forEach(student => {
-                index.push({
-                    type: 'Student',
-                    name: student.name_ar,
-                    id: student.id,
-                    subtext: `رقم مالي: ${student.student_no}`
-                });
-            });
-        }
-
-        console.log('Search Index Created:', index.length, 'items');
-        return index;
-    }, [reports, students_list, all_teachers_list, lang]);
-
+    // handleGlobalSearch removed local indexing in favor of API search
     const handleSearchSelect = React.useCallback((result) => {
         if (result.type === 'Teacher') {
-            setTab('teachers');
-            setTimeout(() => {
-                const el = document.getElementById(`teacher-card-${result.id}`);
-                if (el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    el.classList.add('highlight-flash');
-                    setTimeout(() => el.classList.remove('highlight-flash'), 2000);
-                }
-            }, 100);
+            router.get(route('admin.teacher-profile', result.id));
         } else if (result.type === 'Student') {
-            setTab('students');
-            setStudentFilters(f => ({ ...f, search: result.name }));
-        } else {
-            // Navigate to grades page for subjects/classes
-            router.get(route('admin.subject-grades', result.payload));
+            router.get(route('admin.student-results', result.id));
+        } else if (result.type === 'Subject') {
+            // If it's a raw subject from API, we don't have a direct "grades" link without a teacher/section
+            // But we can filter the dashboard or just alert.
+            // However, the controller returns the Subject model.
+            // If the user wants to see "Subject Grades", they usually mean for a specific assignment.
+            // For now, let's alert or navigate to a general subject view if it existed.
+            alert(lang === 'ar' ? 'يرجى اختيار المعلم والشعبة لعرض درجات هذه المادة.' : 'Please select a teacher and section to view grades for this subject.');
         }
-    }, []);
+    }, [lang]);
 
     const fetchStudents = React.useCallback(async (page = 1) => {
         setStudentLoading(true);
@@ -578,11 +511,12 @@ export default function Dashboard({
                         )}
                     </div>
                     
-                    {/* Top Bar Debounced Search */}
-                    <div className="w-64">
-                        <DebouncedSearchInput 
-                            onSearch={handleGlobalSearch}
+                    {/* Top Bar Global Search (API driven) */}
+                    <div className="w-80">
+                        <GlobalSearch 
+                            onSelect={handleSearchSelect}
                             placeholder={t.searchPlaceholder}
+                            lang={lang}
                         />
                     </div>
                 </div>

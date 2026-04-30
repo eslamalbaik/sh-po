@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 
 interface SearchResult {
-    type: 'Teacher' | 'Subject' | 'Class';
+    type: 'Teacher' | 'Student' | 'Subject' | 'Class';
     name: string;
     id: string | number;
     subtext?: string;
@@ -9,16 +10,16 @@ interface SearchResult {
 }
 
 interface Props {
-    data: SearchResult[];
     onSelect: (result: SearchResult) => void;
     placeholder?: string;
     lang?: string;
 }
 
-export default function GlobalSearch({ data, onSelect, placeholder = "بحث عن معلم، مادة، أو شعبة...", lang = 'ar' }: Props) {
+export default function GlobalSearch({ onSelect, placeholder = "بحث عن معلم، طالب، أو مادة...", lang = 'ar' }: Props) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -33,28 +34,67 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Debounced search logic
+    // API search logic with debounce
     useEffect(() => {
-        const timer = setTimeout(() => {
-            const cleanQuery = query.trim().toLowerCase();
-            if (cleanQuery.length > 0) {
-                console.log('Searching for:', cleanQuery);
-                const searchTerms = cleanQuery.split(' ');
-                
-                const filtered = data.filter(item => {
-                    const itemName = (item.name || '').toLowerCase();
-                    const itemSubtext = (item.subtext || '').toLowerCase();
+        const timer = setTimeout(async () => {
+            const cleanQuery = query.trim();
+            if (cleanQuery.length >= 2) {
+                setLoading(true);
+                try {
+                    const response = await axios.get('/api/admin/global-search', {
+                        params: { query: cleanQuery }
+                    });
                     
-                    // Match if ALL search terms are found in either name or subtext
-                    return searchTerms.every(term => 
-                        itemName.includes(term) || itemSubtext.includes(term)
-                    );
-                }).slice(0, 20);
-                
-                console.log('Results found:', filtered.length);
-                setResults(filtered);
-                setIsOpen(true);
-                setActiveIndex(-1);
+                    const data = response.data;
+                    const combinedResults: SearchResult[] = [];
+
+                    // Format Teachers
+                    if (data.teachers) {
+                        data.teachers.forEach((t: any) => {
+                            combinedResults.push({
+                                type: 'Teacher',
+                                name: lang === 'ar' ? t.name_ar : (t.name_en || t.name_ar),
+                                id: t.id,
+                                subtext: t.user?.email || t.staff_no,
+                                payload: t
+                            });
+                        });
+                    }
+
+                    // Format Students
+                    if (data.students) {
+                        data.students.forEach((s: any) => {
+                            combinedResults.push({
+                                type: 'Student',
+                                name: lang === 'ar' ? s.name_ar : (s.name_en || s.name_ar),
+                                id: s.id,
+                                subtext: `${lang === 'ar' ? 'رقم الطالب' : 'Student No'}: ${s.student_no}`,
+                                payload: s
+                            });
+                        });
+                    }
+
+                    // Format Subjects
+                    if (data.subjects) {
+                        data.subjects.forEach((subj: any) => {
+                            combinedResults.push({
+                                type: 'Subject',
+                                name: lang === 'ar' ? subj.name_ar : (subj.name_en || subj.name_ar),
+                                id: subj.id,
+                                payload: subj
+                            });
+                        });
+                    }
+
+                    setResults(combinedResults);
+                    setIsOpen(true);
+                    setActiveIndex(-1);
+                } catch (error) {
+                    console.error('Search error:', error);
+                    setResults([]);
+                } finally {
+                    setLoading(false);
+                }
             } else {
                 setResults([]);
                 setIsOpen(false);
@@ -62,7 +102,7 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [query, data]);
+    }, [query, lang]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'ArrowDown') {
@@ -84,6 +124,7 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
         switch (type) {
             case 'Teacher': return 'badge-teacher';
             case 'Subject': return 'badge-subject';
+            case 'Student': return 'badge-student';
             case 'Class': return 'badge-class';
             default: return '';
         }
@@ -91,8 +132,8 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
 
     const getBadgeLabel = (type: string) => {
         const labels: Record<string, Record<string, string>> = {
-            ar: { Teacher: 'معلم', Subject: 'مادة', Class: 'شعبة' },
-            en: { Teacher: 'Teacher', Subject: 'Subject', Class: 'Class' }
+            ar: { Teacher: 'معلم', Subject: 'مادة', Student: 'طالب', Class: 'شعبة' },
+            en: { Teacher: 'Teacher', Subject: 'Subject', Student: 'Student', Class: 'Class' }
         };
         return labels[lang]?.[type] || type;
     };
@@ -114,10 +155,12 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
                     role="combobox"
                     aria-controls="search-results-list"
                 />
-                <span className="search-icon">🔍</span>
+                <span className="search-icon">
+                    {loading ? <span className="animate-spin text-xs">⏳</span> : '🔍'}
+                </span>
             </div>
 
-            {isOpen && (
+            {isOpen && query.trim().length >= 2 && (
                 <div className="search-results" id="search-results-list" role="listbox">
                     {results.length > 0 ? (
                         results.map((result, index) => (
@@ -141,7 +184,7 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
                                 </span>
                             </div>
                         ))
-                    ) : (
+                    ) : !loading && (
                         <div className="search-no-results">{noResultsMsg}</div>
                     )}
                 </div>
@@ -149,4 +192,3 @@ export default function GlobalSearch({ data, onSelect, placeholder = "بحث ع�
         </div>
     );
 }
-

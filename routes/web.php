@@ -3,6 +3,7 @@
 use App\Http\Controllers\ParentPortalController;
 use App\Http\Controllers\StaffPortalController;
 use App\Http\Controllers\AdminPortalController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -63,6 +64,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/groups', [AdminPortalController::class, 'storeGroup'])->name('admin.groups.store');
         Route::put('/admin/groups/{id}', [AdminPortalController::class, 'updateGroup'])->name('admin.groups.update');
         Route::delete('/admin/groups/{id}', [AdminPortalController::class, 'deleteGroup'])->name('admin.groups.destroy');
+        Route::get('/api/admin/global-search', [GlobalSearchController::class, 'index'])->name('api.admin.global-search');
     });
 });
 
