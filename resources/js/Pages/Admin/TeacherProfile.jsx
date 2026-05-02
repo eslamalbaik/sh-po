@@ -14,6 +14,8 @@ export default function TeacherProfile({ staff, reportData = [] }) {
             statsSuccess: "متوسط نسبة النجاح",
             statsStudents: "إجمالي الطلاب",
             detailsTitle: "تفاصيل المواد والصفوف",
+            activeSections: "الشعب والصفوف النشطة",
+            archivedSections: "الشعب والصفوف المؤرشفة (المنقولة)",
             student: "الطالب",
             totalPct: "المجموع %",
             assessments: "تقييمات",
@@ -28,6 +30,8 @@ export default function TeacherProfile({ staff, reportData = [] }) {
             statsSuccess: "Average Success Rate",
             statsStudents: "Total Students Managed",
             detailsTitle: "Subjects & Sections Details",
+            activeSections: "Active Subjects & Sections",
+            archivedSections: "Archived / Transferred Sections",
             student: "Student",
             totalPct: "Total %",
             assessments: "Assessments",
@@ -48,6 +52,104 @@ export default function TeacherProfile({ staff, reportData = [] }) {
         : 0;
 
     const totalStudentsManaged = reportData.reduce((acc, curr) => acc + curr.total_students, 0);
+
+    const activeAssignments = reportData.filter(ass => ass.status === 'active');
+    const archivedAssignments = reportData.filter(ass => ass.status !== 'active');
+
+    const renderAssignmentCard = (ass) => (
+        <div key={ass.id} className="ass-card" style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', opacity: ass.status !== 'active' ? 0.8 : 1 }}>
+            <div 
+                className="ass-header" 
+                onClick={() => toggleAssignment(ass.id)}
+                style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <div style={{ background: ass.status === 'active' ? '#f1f5f9' : '#fee2e2', padding: '10px 15px', borderRadius: '12px', fontWeight: 'bold', color: ass.status === 'active' ? '#1e293b' : '#991b1b' }}>
+                        {ass.section_name}
+                        {ass.status !== 'active' && <span style={{ fontSize: '10px', display: 'block', opacity: 0.7 }}>{lang === 'ar' ? '(مؤرشفة)' : '(Archived)'}</span>}
+                    </div>
+                    <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                            {lang === 'ar' 
+                                ? (ass.subject?.name_ar || ass.subject_name_ar || ass.subject_name) 
+                                : (ass.subject?.name_en || ass.subject?.name_ar || ass.subject_name_en || ass.subject_name_ar || ass.subject_name)
+                            }
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{ass.total_students} {t.totalStudents} — {ass.assessments.length} {t.assessments}</div>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>{t.successRate}</div>
+                        <div style={{ fontWeight: 'bold', color: ass.success_rate >= 50 ? '#059669' : '#dc2626' }}>{ass.success_rate}%</div>
+                    </div>
+                    <div style={{ transform: expandedAssignment === ass.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>🔽</div>
+                </div>
+            </div>
+
+            {expandedAssignment === ass.id && (
+                <div className="ass-content" style={{ padding: '20px', borderTop: '1px solid #f1f5f9', background: '#fafafa' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="classic-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ background: '#f1f5f9' }}>
+                                    <th style={{ padding: '12px', textAlign: lang === 'ar' ? 'right' : 'left', borderRadius: lang === 'ar' ? '10px 0 0 10px' : '0 10px 10px 0' }}>{t.student}</th>
+                                    {ass.assessments.map(assess => (
+                                        <th key={assess.id} style={{ padding: '12px', textAlign: 'center', fontSize: '11px' }}>
+                                            <div style={{ fontWeight: 'bold' }}>{lang === 'ar' ? assess.note_ar : (assess.note_en || assess.note_ar)}</div>
+                                            <div style={{ opacity: 0.5 }}>({assess.full_mark})</div>
+                                            {assess.staff_id !== staff.id && (
+                                                <div style={{ fontSize: '9px', color: '#6366f1', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                                                    👤 {lang === 'ar' ? assess.staff?.name_ar : (assess.staff?.name_en || assess.staff?.name_ar)}
+                                                </div>
+                                            )}
+                                        </th>
+                                    ))}
+                                    <th style={{ padding: '12px', textAlign: 'center', borderRadius: lang === 'ar' ? '0 10px 10px 0' : '10px 0 0 10px' }}>{t.totalPct}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {ass.students.map(student => {
+                                    const studentGrades = ass.grades.filter(g => g.student_id === student.id);
+                                    const totalScore = studentGrades.reduce((sum, g) => sum + parseFloat(g.score || 0), 0);
+                                    const totalPossible = ass.assessments.reduce((sum, a) => sum + parseFloat(a.full_mark), 0);
+                                    const pct = totalPossible > 0 ? Math.min(Math.round((totalScore / totalPossible) * 100), 100) : 0;
+
+                                    return (
+                                        <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '12px', fontWeight: '500' }}>{lang === 'ar' ? student.name_ar : (student.name_en || student.name_ar)}</td>
+                                            {ass.assessments.map(assess => {
+                                                const grade = studentGrades.find(g => g.assessment_id === assess.id);
+                                                return (
+                                                    <td key={assess.id} style={{ padding: '12px', textAlign: 'center' }}>
+                                                        {grade ? grade.score : '-'}
+                                                    </td>
+                                                );
+                                            })}
+                                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                                                <span style={{ 
+                                                    padding: '4px 8px', 
+                                                    borderRadius: '6px', 
+                                                    fontSize: '12px', 
+                                                    fontWeight: 'bold',
+                                                    background: pct >= 50 ? '#dcfce7' : '#fee2e2',
+                                                    color: pct >= 50 ? '#166534' : '#991b1b'
+                                                }}>
+                                                    {pct}%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 
     return (
         <div className="admin-portal-body" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
@@ -110,94 +212,33 @@ export default function TeacherProfile({ staff, reportData = [] }) {
 
                 <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px', color: '#1e293b' }}>{t.detailsTitle}</h2>
 
-                <div className="assignments-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    {reportData.map((ass) => (
-                        <div key={ass.id} className="ass-card" style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                            <div 
-                                className="ass-header" 
-                                onClick={() => toggleAssignment(ass.id)}
-                                style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'background 0.2s' }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                    <div style={{ background: '#f1f5f9', padding: '10px 15px', borderRadius: '12px', fontWeight: 'bold', color: '#1e293b' }}>{ass.section_name}</div>
-                                    <div>
-                                        <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
-                                            {lang === 'ar' 
-                                                ? (ass.subject?.name_ar || ass.subject_name_ar || ass.subject_name) 
-                                                : (ass.subject?.name_en || ass.subject?.name_ar || ass.subject_name_en || ass.subject_name_ar || ass.subject_name)
-                                            }
-                                        </div>
-                                        <div style={{ fontSize: '12px', color: '#64748b' }}>{ass.total_students} {t.totalStudents} — {ass.assessments.length} {t.assessments}</div>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                                    <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>{t.successRate}</div>
-                                        <div style={{ fontWeight: 'bold', color: ass.success_rate >= 50 ? '#059669' : '#dc2626' }}>{ass.success_rate}%</div>
-                                    </div>
-                                    <div style={{ transform: expandedAssignment === ass.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}>🔽</div>
-                                </div>
+                {/* Active Assignments */}
+                <div style={{ marginBottom: '30px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ width: '10px', height: '10px', background: '#10b981', borderRadius: '50%' }}></span>
+                        {t.activeSections}
+                    </h3>
+                    <div className="assignments-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {activeAssignments.length > 0 ? activeAssignments.map(renderAssignmentCard) : (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', background: '#f1f5f9', borderRadius: '12px' }}>
+                                {lang === 'ar' ? 'لا توجد شعب نشطة حالياً' : 'No active sections found'}
                             </div>
-
-                            {expandedAssignment === ass.id && (
-                                <div className="ass-content" style={{ padding: '20px', borderTop: '1px solid #f1f5f9', background: '#fafafa' }}>
-                                    <div style={{ overflowX: 'auto' }}>
-                                        <table className="classic-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                            <thead>
-                                                <tr style={{ background: '#f1f5f9' }}>
-                                                    <th style={{ padding: '12px', textAlign: lang === 'ar' ? 'right' : 'left', borderRadius: lang === 'ar' ? '10px 0 0 10px' : '0 10px 10px 0' }}>{t.student}</th>
-                                                    {ass.assessments.map(assess => (
-                                                        <th key={assess.id} style={{ padding: '12px', textAlign: 'center', fontSize: '11px' }}>
-                                                            {lang === 'ar' ? assess.note_ar : (assess.note_en || assess.note_ar)}<br/>
-                                                            <span style={{ opacity: 0.5 }}>({assess.full_mark})</span>
-                                                        </th>
-                                                    ))}
-                                                    <th style={{ padding: '12px', textAlign: 'center', borderRadius: lang === 'ar' ? '0 10px 10px 0' : '10px 0 0 10px' }}>{t.totalPct}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {ass.students.map(student => {
-                                                    const studentGrades = ass.grades.filter(g => g.student_id === student.id);
-                                                    const totalScore = studentGrades.reduce((sum, g) => sum + parseFloat(g.score || 0), 0);
-                                                    const totalPossible = ass.assessments.reduce((sum, a) => sum + parseFloat(a.full_mark), 0);
-                                                    const pct = totalPossible > 0 ? Math.min(Math.round((totalScore / totalPossible) * 100), 100) : 0;
-
-                                                    return (
-                                                        <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                            <td style={{ padding: '12px', fontWeight: '500' }}>{lang === 'ar' ? student.name_ar : (student.name_en || student.name_ar)}</td>
-                                                            {ass.assessments.map(assess => {
-                                                                const grade = studentGrades.find(g => g.assessment_id === assess.id);
-                                                                return (
-                                                                    <td key={assess.id} style={{ padding: '12px', textAlign: 'center' }}>
-                                                                        {grade ? grade.score : '-'}
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                                                                <span style={{ 
-                                                                    padding: '4px 8px', 
-                                                                    borderRadius: '6px', 
-                                                                    fontSize: '12px', 
-                                                                    fontWeight: 'bold',
-                                                                    background: pct >= 50 ? '#dcfce7' : '#fee2e2',
-                                                                    color: pct >= 50 ? '#166534' : '#991b1b'
-                                                                }}>
-                                                                    {pct}%
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                        )}
+                    </div>
                 </div>
+
+                {/* Archived Assignments */}
+                {archivedAssignments.length > 0 && (
+                    <div style={{ marginBottom: '30px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ width: '10px', height: '10px', background: '#94a3b8', borderRadius: '50%' }}></span>
+                            {t.archivedSections}
+                        </h3>
+                        <div className="assignments-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            {archivedAssignments.map(renderAssignmentCard)}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `

@@ -7,11 +7,17 @@ import PrintGradesModal from '@/Components/PrintGradesModal';
 import GroupCard from '@/Components/GroupCard';
 import AddGroupModal from '@/Components/AddGroupModal';
 
-export default function Dashboard({ staff = {}, subjects = [], assignments = [], groups = [], allSubjects = [], allStudents = [] }) {
-    // subjects from SubjectGroupResource is already unified — use it directly
-    // Fallback: build from raw assignments/groups if subjects not provided
-    // Use unified subjects from controller
+export default function Dashboard({ 
+    staff = {}, 
+    subjects = [], 
+    archivedSubjects = [],
+    assignments = [], 
+    groups = [], 
+    allSubjects = [], 
+    allStudents = [] 
+}) {
     const allTargets = subjects;
+    const archivedTargets = archivedSubjects;
 
     const [activeView, setActiveView] = useState('cards');
     const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -257,6 +263,10 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
 
     const t = dict[lang] || dict.ar;
 
+    const isCurrentTeacher = (assessment) => {
+        return String(assessment.staff_id) === String(staff.id);
+    };
+
 
 
 
@@ -283,7 +293,13 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
             resp.data.grades.forEach(g => {
                 const sId = String(g.student_id).toLowerCase();
                 const aId = String(g.assessment_id).toLowerCase();
-                gradeMap[`${sId}_${aId}`] = { score: g.score, is_absent: !!g.is_absent };
+                gradeMap[`${sId}_${aId}`] = { 
+                    score: g.score, 
+                    is_absent: !!g.is_absent,
+                    creator: g.creator,
+                    updater: g.updater,
+                    is_edited: !!g.is_edited
+                };
             });
             setGrades(gradeMap);
         } catch (err) {
@@ -598,7 +614,7 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                 <span>{isAr ? 'إنشاء مجموعة جديدة' : 'Create New Group'}</span>
                             </button>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
                             {allTargets.map((target) => (
                                 <GroupCard 
                                     key={target.type + '-' + target.id}
@@ -613,6 +629,32 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                 />
                             ))}
                         </div>
+
+                        {archivedTargets.length > 0 && (
+                            <div className="mt-12 pt-12 border-t border-slate-200">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <h2 className="text-2xl font-bold text-slate-400">{isAr ? 'الأرشيف / التكليفات السابقة' : 'Archive / Previous Assignments'}</h2>
+                                    <span className="bg-slate-50 text-slate-400 px-3 py-1 rounded-full text-sm font-bold border border-slate-100">
+                                        {archivedTargets.length}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75">
+                                    {archivedTargets.map((target) => (
+                                        <GroupCard 
+                                            key={target.type + '-' + target.id}
+                                            item={{...target, isArchived: true}}
+                                            lang={lang}
+                                            onViewResults={(item) => {
+                                                setSelectedAssignment(item);
+                                                setActiveView('grades');
+                                            }}
+                                            onDelete={handleDeleteGroup}
+                                            onEditStudents={openEditGroup}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -630,9 +672,11 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                         <button className="p-btn btn-dark" onClick={() => setShowPrintModal(true)}>
                             <span>🖨️</span> {t.print}
                         </button>
-                        <button className="p-btn btn-indigo" onClick={() => setShowAddModal(true)}>
-                            <span>➕</span> {t.newAssess}
-                        </button>
+                        {selectedAssignment?.status !== 'completed' && (
+                            <button className="p-btn btn-indigo" onClick={() => setShowAddModal(true)}>
+                                <span>➕</span> {t.newAssess}
+                            </button>
+                        )}
                         {Object.values(saving).some(v => v) && (
                             <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full flex items-center gap-2">
                                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
@@ -713,11 +757,18 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                         <th key={ass.id} className="th-assessment">
                                             <div className="ass-badge">{t.types[ass.type] || ass.type}</div>
                                             <div className="ass-title">{lang === 'ar' ? ass.note_ar : ass.note_en || ass.note_ar}</div>
+                                            {!isCurrentTeacher(ass) && (
+                                                <div className="text-[10px] text-amber-600 font-bold bg-amber-50 rounded px-1 mb-1">
+                                                    {isAr ? `رصد بواسطة: أ. ${ass.staff?.name_ar || 'سابق'}` : `Recorded by: ${ass.staff?.name_en || ass.staff?.name_ar || 'Former'}`}
+                                                </div>
+                                            )}
                                             <div style={{ fontSize: '10px', opacity: 0.6 }}>{t.fullMark} {ass.full_mark}</div>
-                                            <div className="ass-controls">
-                                                <button className="ass-icon-btn trash" onClick={() => handleDeleteAssessment(ass.id)}>🗑️</button>
-                                                <button className="ass-icon-btn edit" onClick={() => handleEditAssessment(ass)}>✍️</button>
-                                            </div>
+                                            {(isCurrentTeacher(ass) || selectedAssignment?.status === 'active') && selectedAssignment?.status !== 'completed' && (
+                                                <div className="ass-controls">
+                                                    <button className="ass-icon-btn trash" onClick={() => handleDeleteAssessment(ass.id)}>🗑️</button>
+                                                    <button className="ass-icon-btn edit" onClick={() => handleEditAssessment(ass)}>✍️</button>
+                                                </div>
+                                            )}
                                         </th>
                                     ))}
                                     <th className="total-col" style={{ textAlign: 'center' }}>{t.total}</th>
@@ -745,24 +796,27 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                                 if (score) rowTotal += parseFloat(score);
                                                 
                                                 return (
-                                                    <td key={ass.id} className="score-cell">
+                                                    <td key={ass.id} className="score-cell relative group">
                                                         <input 
                                                             type="text"
                                                             lang="en"
-                                                            className={`score-input ${saving[key] ? 'saving-inp' : ''} ${(score === null || score === undefined) && !isAbsent ? 'empty' : ''} ${isAbsent ? 'absent' : ''} ${score !== null && score !== '' && parseFloat(score) >= 0 && parseFloat(score) < (ass.full_mark / 2) && !isAbsent ? 'low' : ''}`}
+                                                            readOnly={selectedAssignment?.status === 'completed'}
+                                                            className={`score-input ${saving[key] ? 'saving-inp' : ''} ${(score === null || score === undefined) && !isAbsent ? 'empty' : ''} ${isAbsent ? 'absent' : ''} ${score !== null && score !== '' && parseFloat(score) >= 0 && parseFloat(score) < (ass.full_mark / 2) && !isAbsent ? 'low' : ''} ${(selectedAssignment?.status === 'completed') ? 'bg-slate-50 cursor-not-allowed opacity-70' : ''}`}
                                                             value={isAbsent ? 'A' : (score ?? '')}
                                                             onChange={(e) => {
+                                                                if (selectedAssignment?.status === 'completed') return;
                                                                 const val = e.target.value;
                                                                 const key = `${sId}_${aId}`;
                                                                 if (val.toUpperCase() === 'A') {
-                                                                    setGrades(prev => ({ ...prev, [key]: { score: 0, is_absent: true } }));
+                                                                    setGrades(prev => ({ ...prev, [key]: { ...gradeObj, score: 0, is_absent: true } }));
                                                                 } else if (val === '' || (!isNaN(val) && parseFloat(val) >= 0)) {
                                                                     if (val === '' || parseFloat(val) <= ass.full_mark) {
-                                                                        setGrades(prev => ({ ...prev, [key]: { score: val, is_absent: false } }));
+                                                                        setGrades(prev => ({ ...prev, [key]: { ...gradeObj, score: val, is_absent: false } }));
                                                                     }
                                                                 }
                                                             }}
                                                             onBlur={(e) => {
+                                                                if (selectedAssignment?.status === 'completed') return;
                                                                 const val = e.target.value;
                                                                 if (val.toUpperCase() === 'A') {
                                                                     handleScoreChange(std.id, ass.id, 0, true);
@@ -774,6 +828,12 @@ export default function Dashboard({ staff = {}, subjects = [], assignments = [],
                                                             }}
                                                             placeholder="-"
                                                         />
+                                                        {gradeObj.is_edited && (
+                                                            <div className="absolute top-1 left-1 w-2 h-2 bg-blue-500 rounded-full shadow-sm" title={
+                                                                isAr ? `تم رصد الدرجة الأصلية بواسطة: ${gradeObj.creator?.name_ar || 'غير معروف'} \nوتم تعديلها بواسطة: ${gradeObj.updater?.name_ar || 'غير معروف'}`
+                                                                : `Originally recorded by: ${gradeObj.creator?.name_en || gradeObj.creator?.name_ar || 'Unknown'} \nUpdated by: ${gradeObj.updater?.name_en || gradeObj.updater?.name_ar || 'Unknown'}`
+                                                            }></div>
+                                                        )}
                                                     </td>
                                                 );
                                             })}

@@ -75,11 +75,18 @@ class ParentPortalController extends Controller
             ->get();
 
         // 2. دمج التقييمات مع درجات هذا الطالب تحديداً
-        $results = $assessments->map(function($a) use ($studentId) {
+        $results = $assessments->map(function($a) use ($studentId, $student) {
             $grade = StudentGrade::where('assessment_id', $a->id)
                 ->where('student_id', $studentId)
                 ->first();
             
+            // البحث عن المعلم الحالي لهذه المادة في شعبة الطالب
+            $currentAssignment = \App\Models\TeacherAssignment::where([
+                'section_id' => $student->section_id,
+                'subject_id' => $a->subject_id,
+                'status'     => 'active'
+            ])->with('staff')->first();
+
             return [
                 'assessment_id' => $a->id,
                 'assessment_ar' => $a->note_ar,
@@ -88,8 +95,10 @@ class ParentPortalController extends Controller
                 'subject_id' => $a->subject_id,
                 'subject_ar' => $a->subject->name_ar ?? '',
                 'subject_en' => $a->subject->name_en ?? $a->subject->name_ar ?? '',
-                'teacher_ar' => $a->staff->name_ar ?? '',
-                'teacher_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
+                'teacher_ar' => $currentAssignment ? $currentAssignment->staff->name_ar : ($a->staff->name_ar ?? ''),
+                'teacher_en' => $currentAssignment ? ($currentAssignment->staff->name_en ?? $currentAssignment->staff->name_ar) : ($a->staff->name_en ?? $a->staff->name_ar ?? ''),
+                'creator_ar' => $a->staff->name_ar ?? '',
+                'creator_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
                 'score' => $grade ? $grade->score : null,
                 'is_absent' => $grade ? $grade->is_absent : false,
                 'full_mark' => $a->full_mark,
@@ -155,11 +164,17 @@ class ParentPortalController extends Controller
             ->with(['subject', 'staff', 'group'])
             ->get();
 
-        $results = $assessments->map(function($a) use ($studentId) {
+        $results = $assessments->map(function($a) use ($studentId, $student) {
             $grade = StudentGrade::where('assessment_id', $a->id)
                 ->where('student_id', $studentId)
                 ->first();
             
+            $currentAssignment = \App\Models\TeacherAssignment::where([
+                'section_id' => $student->section_id,
+                'subject_id' => $a->subject_id,
+                'status'     => 'active'
+            ])->with('staff')->first();
+
             return [
                 'assessment_id' => $a->id,
                 'assessment_ar' => $a->note_ar,
@@ -168,8 +183,10 @@ class ParentPortalController extends Controller
                 'subject_id' => $a->subject_id,
                 'subject_ar' => $a->subject->name_ar ?? '',
                 'subject_en' => $a->subject->name_en ?? $a->subject->name_ar ?? '',
-                'teacher_ar' => $a->staff->name_ar ?? '',
-                'teacher_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
+                'teacher_ar' => $currentAssignment ? $currentAssignment->staff->name_ar : ($a->staff->name_ar ?? ''),
+                'teacher_en' => $currentAssignment ? ($currentAssignment->staff->name_en ?? $currentAssignment->staff->name_ar) : ($a->staff->name_en ?? $a->staff->name_ar ?? ''),
+                'creator_ar' => $a->staff->name_ar ?? '',
+                'creator_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
                 'score' => $grade ? $grade->score : null,
                 'is_absent' => $grade ? $grade->is_absent : false,
                 'full_mark' => $a->full_mark,

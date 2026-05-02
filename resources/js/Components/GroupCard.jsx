@@ -21,6 +21,11 @@ export default function GroupCard({ item, onViewResults, onEditStudents, onDelet
                         <div className="text-sm text-slate-500 font-medium mt-1">
                             {isAr ? item.teacher_name_ar : item.teacher_name_en}
                         </div>
+                        {(item.status === 'completed' || item.isArchived) && (
+                            <div className="inline-block mt-2 px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-black rounded uppercase tracking-wider">
+                                {isAr ? 'أرشيف' : 'Archive'}
+                            </div>
+                        )}
                     </div>
                 </div>
                 

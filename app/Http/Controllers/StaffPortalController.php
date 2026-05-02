@@ -26,7 +26,6 @@ class StaffPortalController extends Controller
             return redirect()->route('admin.dashboard');
         }
 
-        // جلب المعلم المرتبط بالمستخدم
         $staff = $user->staff;
         
         if (!$staff) {
@@ -37,8 +36,15 @@ class StaffPortalController extends Controller
             ]);
         }
         
-        // جلب التكليفات (الصفوف والمواد المسندة للمعلم)
-        $assignments = TeacherAssignment::where('staff_id', $staff->id)
+        // جلب التكليفات النشطة
+        $activeAssignments = TeacherAssignment::where('staff_id', $staff->id)
+            ->where('status', 'active')
+            ->with(['section.grade', 'subject', 'staff'])
+            ->get();
+
+        // جلب التكليفات المكتملة (الأرشيف)
+        $archivedAssignments = TeacherAssignment::where('staff_id', $staff->id)
+            ->where('status', 'completed')
             ->with(['section.grade', 'subject', 'staff'])
             ->get();
 
@@ -49,11 +55,12 @@ class StaffPortalController extends Controller
             
         $subjects = collect();
         
-        // تحويل التكليفات العادية
-        foreach ($assignments as $a) {
+        // تحويل التكليفات النشطة
+        foreach ($activeAssignments as $a) {
             $subjects->push([
                 'id' => $a->id,
                 'type' => 'section',
+                'status' => 'active',
                 'name_ar' => $a->section->label_ar ?? (($a->section->grade->number ?? '') . ($a->section->letter ?? '')),
                 'name_en' => $a->section->label_en ?? $a->section->label_ar ?? '',
                 'subject_id' => $a->subject_id,
@@ -70,11 +77,34 @@ class StaffPortalController extends Controller
             ]);
         }
         
-        // تحويل المجموعات
+        $archivedSubjects = collect();
+        foreach ($archivedAssignments as $a) {
+            $archivedSubjects->push([
+                'id' => $a->id,
+                'type' => 'section',
+                'status' => 'completed',
+                'name_ar' => $a->section->label_ar ?? (($a->section->grade->number ?? '') . ($a->section->letter ?? '')),
+                'name_en' => $a->section->label_en ?? $a->section->label_ar ?? '',
+                'subject_id' => $a->subject_id,
+                'subject_name_ar' => $a->subject->name_ar ?? '',
+                'subject_name_en' => $a->subject->name_en ?? $a->subject->name_ar ?? '',
+                'teacher_name_ar' => $a->staff->name_ar ?? '',
+                'teacher_name_en' => $a->staff->name_en ?? $a->staff->name_ar ?? '',
+                'students_count' => \App\Models\Student::where('section_id', $a->section_id)->where('is_active', true)->count(),
+                'grade_name' => $a->section->grade->number ?? '',
+                'subject' => $a->subject,
+                'section_id' => $a->section_id,
+                'section' => $a->section,
+                'staff' => $a->staff,
+            ]);
+        }
+        
+        // تحويل المجموعات (تعتبر نشطة دائماً حالياً)
         foreach ($groups as $g) {
             $subjects->push([
                 'id' => $g->id,
                 'type' => 'group',
+                'status' => 'active',
                 'name_ar' => $g->name_ar,
                 'name_en' => $g->name_en ?? $g->name_ar,
                 'description' => $g->description,
@@ -93,19 +123,17 @@ class StaffPortalController extends Controller
         }
             
         return Inertia::render('Staff/Dashboard', [
-            'staff'       => $staff,
-            'user'        => $user,
-            'subjects'    => $subjects->values()->all(),
-            'assignments' => $assignments,
-            'groups'      => $groups,
-            'allSubjects' => \App\Models\Subject::all(),
-            'allStudents' => \App\Models\Student::where('is_active', true)->get(),
+            'staff'            => $staff,
+            'user'             => $user,
+            'subjects'         => $subjects->values()->all(),
+            'archivedSubjects' => $archivedSubjects->values()->all(),
+            'assignments'      => $activeAssignments,
+            'groups'           => $groups,
+            'allSubjects'      => \App\Models\Subject::all(),
+            'allStudents'      => \App\Models\Student::where('is_active', true)->get(),
         ]);
     }
 
-    /**
-     * جلب بيانات الطلاب والدرجات لشعبة ومادة معينة
-     */
     public function getGrades(Request $request)
     {
         $request->validate([
@@ -114,8 +142,9 @@ class StaffPortalController extends Controller
             'subject_id' => 'required',
         ]);
 
-        // Check if this is an elective assignment (has specific students)
         $staffId = Auth::user()->staff->id;
+        
+        // جلب التكليف (سواء نشط أو مكتمل)
         $assignment = TeacherAssignment::where([
             'staff_id'   => $staffId,
             'section_id' => $request->section_id,
@@ -144,8 +173,9 @@ class StaffPortalController extends Controller
 
         $students = $studentQuery->orderBy('name_ar')->get();
 
+        // جلب كافة التقييمات لهذه الشعبة والمادة (حتى لو لمعلم سابق) لتظهر كأرشيف
         $assessmentQuery = Assessment::where('subject_id', $request->subject_id)
-            ->where('staff_id', $staffId);
+            ->with(['staff']);
 
         if ($request->group_id) {
             $assessmentQuery->where('group_id', $request->group_id);
@@ -156,12 +186,15 @@ class StaffPortalController extends Controller
         $assessments = $assessmentQuery->get();
 
         $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))
+            ->with(['creator', 'updater'])
             ->get();
 
         return response()->json([
             'students'    => $students,
             'assessments' => $assessments,
-            'grades'      => $grades, // This now includes is_absent
+            'grades'      => $grades,
+            'currentStaffId' => $staffId,
+            'assignmentStatus' => $assignment->status ?? 'active'
         ]);
     }
 
@@ -178,16 +211,51 @@ class StaffPortalController extends Controller
                 'is_absent'     => 'nullable|boolean',
             ]);
 
-            StudentGrade::updateOrCreate(
-                [
+            $staffId = Auth::user()->staff->id;
+            
+            DB::transaction(function() use ($request, $staffId) {
+                $grade = StudentGrade::where([
                     'assessment_id' => $request->assessment_id,
                     'student_id'    => $request->student_id,
-                ],
-                [
-                    'score'      => $request->score,
-                    'is_absent'  => $request->is_absent ?? 0,
-                ]
-            );
+                ])->first();
+
+                if (!$grade) {
+                    // New record
+                    StudentGrade::create([
+                        'assessment_id' => $request->assessment_id,
+                        'student_id'    => $request->student_id,
+                        'score'         => $request->score,
+                        'is_absent'     => $request->is_absent ?? 0,
+                        'staff_id'      => $staffId,
+                        'created_by'    => $staffId,
+                        'updated_by'    => null,
+                        'is_edited'     => false,
+                    ]);
+                } else {
+                    // Check if anything changed
+                    $scoreChanged = (string)$grade->score !== (string)$request->score;
+                    $absentChanged = (bool)$grade->is_absent !== (bool)($request->is_absent ?? false);
+
+                    if ($scoreChanged || $absentChanged) {
+                        // Log history
+                        \App\Models\GradeHistory::create([
+                            'student_grade_id' => $grade->id,
+                            'old_score'        => $grade->score,
+                            'new_score'        => $request->score,
+                            'old_absent'       => $grade->is_absent,
+                            'new_absent'       => $request->is_absent ?? 0,
+                            'staff_id'         => $staffId,
+                        ]);
+
+                        $grade->update([
+                            'score'      => $request->score,
+                            'is_absent'  => $request->is_absent ?? 0,
+                            'updated_by' => $staffId,
+                            'is_edited'  => true,
+                        ]);
+                    }
+                }
+            });
 
             return response()->json(['status' => 'success']);
         } catch (\Exception $e) {

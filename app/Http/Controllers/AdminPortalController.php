@@ -31,7 +31,12 @@ class AdminPortalController extends Controller
         ];
 
         // 2. تقرير أداء المعلمين (مع الترقيم)
-        $teachers_report = Staff::with(['assignments.section.grade', 'assignments.subject', 'groups.subject'])
+        $teachers_report = Staff::with([
+            'assignments' => function($q) {
+                $q->where('status', 'active')->with(['section.grade', 'subject']);
+            },
+            'groups.subject'
+        ])
             ->paginate(12); // 12 معلمين في الصفحة
 
         $teachers_report->getCollection()->transform(function($staff) {
@@ -302,6 +307,7 @@ class AdminPortalController extends Controller
     public function getStaffAssignmentsAjax($staffId)
     {
         $assignments = TeacherAssignment::where('staff_id', $staffId)
+            ->where('status', 'active')
             ->with(['section.grade', 'subject'])
             ->get();
         return response()->json($assignments);
@@ -474,8 +480,74 @@ class AdminPortalController extends Controller
     public function deleteAssignment($id)
     {
         $assignment = TeacherAssignment::findOrFail($id);
-        $assignment->delete();
-        return back();
+        
+        return DB::transaction(function() use ($assignment) {
+            // Delete elective students mapping if exists
+            DB::table('elective_students')->where('assignment_id', $assignment->id)->delete();
+            
+            $assignment->delete();
+            return back();
+        });
+    }
+
+    /**
+     * نقل تكليف من معلم إلى معلم آخر مع الحفاظ على الأرشيف
+     */
+    public function transferAssignment(Request $request)
+    {
+        $request->validate([
+            'assignment_id' => 'required|exists:teacher_assignments,id',
+            'new_staff_id'  => 'required|exists:staff,id',
+        ]);
+
+        $oldAssignment = TeacherAssignment::findOrFail($request->assignment_id);
+        
+        if ($oldAssignment->staff_id === $request->new_staff_id) {
+            return back()->withErrors(['transfer' => 'المعلم المختار هو نفس المعلم الحالي.']);
+        }
+
+        return DB::transaction(function() use ($oldAssignment, $request) {
+            // 1. تثبيت الـ staff_id على الدرجات المرصودة حالياً من قبل المعلم القديم (لهذه الشعبة والمادة)
+            $assessments = \App\Models\Assessment::where([
+                'staff_id'   => $oldAssignment->staff_id,
+                'section_id' => $oldAssignment->section_id,
+                'subject_id' => $oldAssignment->subject_id,
+            ])->get();
+
+            foreach ($assessments as $a) {
+                DB::table('student_grades')
+                    ->where('assessment_id', $a->id)
+                    ->whereNull('staff_id')
+                    ->update(['staff_id' => $oldAssignment->staff_id]);
+            }
+
+            // 2. تحديث التكليف القديم ليصبح مكتمل/غير نشط
+            $oldAssignment->update(['status' => 'completed']);
+
+            // 3. إنشاء تكليف جديد للمعلم الجديد
+            $newAssignment = TeacherAssignment::create([
+                'staff_id'             => $request->new_staff_id,
+                'section_id'           => $oldAssignment->section_id,
+                'subject_id'           => $oldAssignment->subject_id,
+                'semester_id'          => $oldAssignment->semester_id,
+                'expected_assessments' => $oldAssignment->expected_assessments,
+                'status'               => 'active',
+            ]);
+
+            // 4. نقل الطلاب المحددين (إذا كان التكليف اختيارياً)
+            $electiveStudents = DB::table('elective_students')
+                ->where('assignment_id', $oldAssignment->id)
+                ->get();
+            
+            foreach ($electiveStudents as $es) {
+                DB::table('elective_students')->insert([
+                    'assignment_id' => $newAssignment->id,
+                    'student_id'    => $es->student_id,
+                ]);
+            }
+
+            return back()->with('success', 'تم نقل التكليف بنجاح.');
+        });
     }
 
     public function viewSubjectGrades($staffId, $sectionId, $subjectId, \Illuminate\Http\Request $request)
@@ -499,9 +571,10 @@ class AdminPortalController extends Controller
         } else {
             $section = \App\Models\Section::with('grade')->findOrFail($sectionId);
 
-            $assessments = \App\Models\Assessment::where('staff_id', $staffId)
-                ->where('section_id', $sectionId)
+            // جلب كافة التقييمات للمادة والشعبة لضمان ظهور التاريخ (حتى لو نقلت المادة)
+            $assessments = \App\Models\Assessment::where('section_id', $sectionId)
                 ->where('subject_id', $subjectId)
+                ->with(['staff'])
                 ->get();
 
             $assignment = TeacherAssignment::where([
@@ -525,7 +598,9 @@ class AdminPortalController extends Controller
             $students = $studentQuery->orderBy('name_ar')->get();
         }
 
-        $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))->get();
+        $grades = StudentGrade::whereIn('assessment_id', $assessments->pluck('id'))
+            ->with(['creator', 'updater'])
+            ->get();
 
         return Inertia::render('Admin/SubjectGrades', [
             'staff'       => $staff,
@@ -584,6 +659,7 @@ class AdminPortalController extends Controller
             $mergedItems->push([
                 'id' => $a->id,
                 'type' => 'section',
+                'status' => $a->status ?? 'active',
                 'section_id' => $a->section_id,
                 'subject_id' => $a->subject_id,
                 'section_name' => $a->section->label_ar ?? ($a->section->grade->number . $a->section->letter),
@@ -600,6 +676,7 @@ class AdminPortalController extends Controller
             $mergedItems->push([
                 'id' => $g->id,
                 'type' => 'group',
+                'status' => 'active',
                 'section_id' => null,
                 'group_id' => $g->id,
                 'subject_id' => $g->subject_id,
@@ -613,13 +690,20 @@ class AdminPortalController extends Controller
         }
 
         $reportData = $mergedItems->map(function($item) use ($id) {
-            $assessments = \App\Models\Assessment::where('subject_id', $item['subject_id']);
+            $assessments = \App\Models\Assessment::where('subject_id', $item['subject_id'])
+                ->with(['staff']);
             
             if ($item['type'] === 'group') {
                 $assessments->where('group_id', $item['group_id']);
                 $students = $item['group']->students()->where('is_active', true)->get();
             } else {
-                $assessments->where('staff_id', $id)->where('section_id', $item['section_id']);
+                // إذا كانت الشعبة نشطة، نجلب كافة التقييمات المرتبطة بالمادة والصف (بما فيها تقييمات المعلمين السابقين)
+                // أما إذا كانت مؤرشفة، فنكتفي بتقييمات هذا المعلم فقط
+                if ($item['status'] === 'active') {
+                    $assessments->where('section_id', $item['section_id']);
+                } else {
+                    $assessments->where('staff_id', $id)->where('section_id', $item['section_id']);
+                }
                 
                 $electiveStudentIds = DB::table('elective_students')
                     ->where('assignment_id', $item['id'])
@@ -663,6 +747,7 @@ class AdminPortalController extends Controller
             return [
                 'id' => $item['id'],
                 'type' => $item['type'],
+                'status' => $item['status'],
                 'section_id' => $item['section_id'],
                 'group_id' => $item['group_id'] ?? null,
                 'subject_id' => $item['subject_id'],

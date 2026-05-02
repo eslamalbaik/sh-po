@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { Head, router, useForm, Link } from '@inertiajs/react';
 import GlobalSearch from '@/Components/GlobalSearch';
 import DebouncedSearchInput from '@/Components/DebouncedSearchInput';
+import SearchableSelect from '@/Components/SearchableSelect';
 import axios from 'axios';
 
 const AddStudentModal = React.lazy(() => import('@/Components/AddStudentModal'));
@@ -9,6 +10,7 @@ const AddStaffModal = React.lazy(() => import('@/Components/AddStaffModal'));
 const AddSubjectModal = React.lazy(() => import('@/Components/AddSubjectModal'));
 const AddGroupModal = React.lazy(() => import('@/Components/AddGroupModal'));
 const TransferStudentModal = React.lazy(() => import('@/Components/TransferStudentModal'));
+const TransferAssignmentModal = React.lazy(() => import('@/Components/TransferAssignmentModal'));
 const ActionConfirmModal = React.lazy(() => import('@/Components/ActionConfirmModal'));
 export default function Dashboard({
     stats = {},
@@ -111,7 +113,9 @@ export default function Dashboard({
             selective: "طلاب محددون",
             assignBtn: "تثبيت التكليف",
             teacher: "المعلم",
-            addNewSubject: "إضافة مادة جديدة"
+            addNewSubject: "إضافة مادة جديدة",
+            transferAssignment: "نقل التكليف",
+            transferSuccess: "تم نقل التكليف بنجاح"
         },
         en: {
             adminBadge: "ADMIN",
@@ -181,7 +185,9 @@ export default function Dashboard({
             selective: "Selective Students",
             assignBtn: "Assign Subject",
             teacher: "Teacher",
-            addNewSubject: "Add New Subject"
+            addNewSubject: "Add New Subject",
+            transferAssignment: "Transfer Assignment",
+            transferSuccess: "Assignment transferred successfully"
         }
     };
 
@@ -199,6 +205,13 @@ export default function Dashboard({
     const [loadingSectionStudents, setLoadingSectionStudents] = useState(false);
     const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
+    const [isTransferAssignmentOpen, setIsTransferAssignmentOpen] = useState(false);
+    const [assignmentToTransfer, setAssignmentToTransfer] = useState(null);
+
+    const handleTransferAssignment = (ass) => {
+        setAssignmentToTransfer(ass);
+        setIsTransferAssignmentOpen(true);
+    };
 
     const openAddGroup = () => { setEditingGroup(null); setIsAddGroupOpen(true); };
     const openEditGroup = (group) => { setEditingGroup(group); setIsAddGroupOpen(true); };
@@ -570,6 +583,8 @@ export default function Dashboard({
                     .leg-kpi-container { grid-template-columns: 1fr; }
                     .modal-container { width: 95% !important; max-width: 100% !important; }
                 }
+                .ltc-name { transition: color 0.2s ease; }
+                .ltc-name:hover { color: #3b82f6 !important; }
                 `}
             </style>
             <div className="leg-kpi-container">
@@ -961,17 +976,18 @@ export default function Dashboard({
                             <div className="f-field">
                                 <label className="f-label" style={{ textAlign: 'center' }}>{t.selectTeacher}</label>
                                 <div style={{ display: 'flex', gap: '10px' }}>
-                                    <select 
-                                        className="f-select"
-                                        style={{ height: '50px', fontSize: '16px', fontWeight: 'bold', flex: 1 }}
+                                    <SearchableSelect 
+                                        className="flex-1"
+                                        options={all_teachers_list.map(staff => ({
+                                            id: staff.id,
+                                            label: lang === 'ar' ? staff.name_ar : (staff.name_en || staff.name_ar)
+                                        }))}
                                         value={selectedStaff}
-                                        onChange={e => setSelectedStaff(e.target.value)}
-                                    >
-                                        <option value="">— {t.selectTeacher} —</option>
-                                        {all_teachers_list.map(staff => (
-                                            <option key={staff.id} value={staff.id}>{lang === 'ar' ? staff.name_ar : (staff.name_en || staff.name_ar)}</option>
-                                        ))}
-                                    </select>
+                                        onChange={setSelectedStaff}
+                                        placeholder={t.selectTeacher}
+                                        lang={lang}
+                                        noResultsText={t.noResults}
+                                    />
                                     <button 
                                         className="p-btn btn-dark"
                                         style={{ padding: '0 20px', borderRadius: '12px' }}
@@ -994,6 +1010,13 @@ export default function Dashboard({
                                                 <span style={{ fontWeight: '800', color: '#1c4c6e' }}>{ass.section?.grade?.number}{ass.section?.letter}</span>
                                                 <span style={{ color: '#94a3b8' }}>—</span>
                                                 <span style={{ fontWeight: 'bold' }}>{lang === 'ar' ? (ass.subject?.name_ar || t.unknownSubject) : (ass.subject?.name_en || ass.subject?.name_ar || t.unknownSubject)}</span>
+                                                <button 
+                                                    style={{ background: '#fef3c7', color: '#d97706', border: 'none', width: '22px', height: '22px', borderRadius: '50%', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    onClick={() => handleTransferAssignment(ass)}
+                                                    title={t.transferAssignment}
+                                                >
+                                                    🔄
+                                                </button>
                                                 <button 
                                                     style={{ background: '#fee2e2', color: '#ef4444', border: 'none', width: '22px', height: '22px', borderRadius: '50%', fontSize: '10px', cursor: 'pointer' }}
                                                     onClick={() => handleDeleteAssignment(ass.id)}
@@ -1333,6 +1356,27 @@ export default function Dashboard({
                     teachers={all_teachers_list}
                     lang={lang}
                     editGroup={editingGroup}
+                    onSuccess={fetchStudents}
+                />
+            </Suspense>
+
+            <Suspense fallback={null}>
+                <TransferAssignmentModal 
+                    isOpen={isTransferAssignmentOpen}
+                    onClose={() => setIsTransferAssignmentOpen(false)}
+                    assignment={assignmentToTransfer}
+                    teachers={all_teachers_list}
+                    lang={lang}
+                    onSuccess={() => {
+                        fetchStaffAssignments(selectedStaff);
+                        setConfirmModal({
+                            isOpen: true,
+                            type: 'success',
+                            title: t.done,
+                            message: t.transferSuccess,
+                            onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
+                        });
+                    }}
                 />
             </Suspense>
             

@@ -14,7 +14,8 @@ class TeacherAssignment extends Model
         'section_id',
         'subject_id',
         'semester_id',
-        'expected_assessments'
+        'expected_assessments',
+        'status'
     ];
 
     public function staff()

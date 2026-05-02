@@ -59,6 +59,10 @@ Route::middleware(['auth'])->group(function () {
         // Assignment Management
         Route::get('/api/admin/staff-assignments/{staffId}', [AdminPortalController::class, 'getStaffAssignmentsAjax'])->name('api.admin.staff-assignments');
         Route::post('/admin/assignments', [AdminPortalController::class, 'storeAssignment'])->name('admin.assignments.store');
+        Route::delete('/admin/assignments/{id}', [AdminPortalController::class, 'deleteAssignment'])->name('admin.assignments.destroy');
+        Route::post('/admin/assignments/transfer', [AdminPortalController::class, 'transferAssignment'])->name('admin.assignments.transfer');
+
+
         
         // Group Management
         Route::post('/admin/groups', [AdminPortalController::class, 'storeGroup'])->name('admin.groups.store');

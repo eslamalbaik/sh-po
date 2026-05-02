@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, router } from '@inertiajs/react';
 import axios from 'axios';
+// @ts-ignore
+import SearchableSelect from './SearchableSelect';
 
 interface Props {
     isOpen: boolean;
@@ -172,17 +174,16 @@ export default function AddGroupModal({ isOpen, onClose, grades, subjects, teach
                         {/* Teacher */}
                         <div className="f-field">
                             <label className="f-label">{t.teacher}</label>
-                            <select 
-                                className="f-select"
+                            <SearchableSelect 
+                                options={teachers.map(staff => ({
+                                    id: staff.id,
+                                    label: lang === 'ar' ? staff.name_ar : (staff.name_en || staff.name_ar)
+                                }))}
                                 value={data.staff_id}
-                                onChange={e => setData('staff_id', e.target.value)}
-                                required
-                            >
-                                <option value="">{t.selectTeacher}</option>
-                                {teachers.map(staff => (
-                                    <option key={staff.id} value={staff.id}>{lang === 'ar' ? staff.name_ar : staff.name_en || staff.name_ar}</option>
-                                ))}
-                            </select>
+                                onChange={val => setData('staff_id', val)}
+                                placeholder={t.selectTeacher}
+                                lang={lang}
+                            />
                         </div>
                         {/* Subject */}
                         <div className="f-field">

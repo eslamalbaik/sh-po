@@ -83,6 +83,11 @@ export default function SubjectGrades({ staff, section, subject, assessments, st
                             {assessments.map(a => (
                                 <th key={a.id} className="th-ass">
                                     <div className="th-ass-title">{a.note_ar || a.title || 'تقييم'}</div>
+                                    {a.staff_id !== staff?.id && (
+                                        <div style={{ fontSize: '10px', color: '#6366f1', marginBottom: '2px' }}>
+                                            👤 {a.staff?.name_ar}
+                                        </div>
+                                    )}
                                     <div className="th-ass-type">{a.type === 'exam' ? 'امتحان' : 'نشاط'}</div>
                                     <div className="th-ass-max">{parseFloat(a.full_mark) || 0} درجة</div>
                                 </th>
@@ -108,8 +113,11 @@ export default function SubjectGrades({ staff, section, subject, assessments, st
                                 const isGreen = score > 0;
                                 
                                 return (
-                                    <td key={a.id} className={`td-grade ${isGreen ? 'grade-green' : 'grade-red'}`}>
+                                    <td key={a.id} className={`td-grade relative group ${isGreen ? 'grade-green' : 'grade-red'}`}>
                                         {score > 0 ? score : '0'}
+                                        {g?.is_edited && (
+                                            <div className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full" title={`رصد بواسطة: ${g.creator?.name_ar || 'غير معروف'}\nتعديل بواسطة: ${g.updater?.name_ar || 'غير معروف'}`}></div>
+                                        )}
                                     </td>
                                 );
                             }) : (

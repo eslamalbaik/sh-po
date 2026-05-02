@@ -423,7 +423,14 @@ function Detail({ subject, stats, lang, onBack }) {
                             <div className="eval-top">
                                 <div>
                                     <div className="eval-name">{isAr ? e.assessment_ar : e.assessment_en}</div>
-                                    <div className="eval-date">{e.published_at?.split('T')[0] || ''}</div>
+                                    <div className="eval-date">
+                                        {e.published_at?.split('T')[0] || ''}
+                                        {e.creator_ar && (
+                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                                {isAr ? `رصد بواسطة: ${e.creator_ar}` : `Recorded by: ${e.creator_en || e.creator_ar}`}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <span className={`type-badge badge-${e.assessment_type || 'exam'}`}>
                                     {isAr ? typeLabels[e.assessment_type]?.ar : typeLabels[e.assessment_type]?.en}
