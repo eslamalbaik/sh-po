@@ -393,7 +393,8 @@ export default function Dashboard({
             id: id,
             type: 'warning',
             title: t.studentStatusTitle,
-            message: t.studentStatusMsg
+            message: t.studentStatusMsg,
+            action: 'archive' // Added explicit action
         });
     };
 
@@ -1385,10 +1386,14 @@ export default function Dashboard({
                     type={confirmModal.type}
                     lang={lang}
                     onConfirm={() => {
-                        if (confirmModal.action === 'delete_staff') performDeleteStaff();
-                        else if (confirmModal.action === 'delete_group') performDeleteGroup();
-                        else if (confirmModal.type === 'danger') performDeleteAssignment();
-                        else confirmArchive();
+                        if (confirmModal.onConfirm) {
+                            confirmModal.onConfirm();
+                        } else {
+                            if (confirmModal.action === 'delete_staff') performDeleteStaff();
+                            else if (confirmModal.action === 'delete_group') performDeleteGroup();
+                            else if (confirmModal.action === 'archive') confirmArchive();
+                            else if (confirmModal.type === 'danger') performDeleteAssignment();
+                        }
                     }}
                     onCancel={() => setConfirmModal(f => ({ ...f, isOpen: false }))}
                 />
