@@ -620,11 +620,13 @@ class AdminPortalController extends Controller
         ]);
 
         $user = User::findOrFail($request->user_id);
-        $user->update([
+        $updated = $user->update([
             'password' => Hash::make($request->password)
         ]);
 
-        return back();
+        \Log::info("Teacher password reset for user {$user->id}: " . ($updated ? 'SUCCESS' : 'FAILED'));
+
+        return back()->with('success', 'teacher_password_reset');
     }
 
     public function resetMyPassword(Request $request)
@@ -633,11 +635,14 @@ class AdminPortalController extends Controller
             'password' => 'required|string|min:4|confirmed',
         ]);
 
-        Auth::user()->update([
+        $user = Auth::user();
+        $updated = $user->update([
             'password' => Hash::make($request->password)
         ]);
 
-        return back();
+        \Log::info("Admin password reset for user {$user->id}: " . ($updated ? 'SUCCESS' : 'FAILED'));
+
+        return back()->with('success', 'admin_password_reset');
     }
 
     public function viewTeacherProfile($id)

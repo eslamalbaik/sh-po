@@ -20,7 +20,8 @@ export default function Dashboard({
     students_list = [],
     all_subjects = [],
     all_groups = [],
-    all_teachers_list = []
+    all_teachers_list = [],
+    flash = {}
 }) {
     const [tab, setTab] = useState('teachers');
     const [students, setStudents] = useState([]);
@@ -233,6 +234,7 @@ export default function Dashboard({
     });
 
     const openResetModal = (teacher) => {
+        console.log("Opening reset modal for teacher:", teacher);
         setResetModal({ open: true, teacher });
         setPwdData({ user_id: teacher.user_id, password: '', password_confirmation: '' });
         setShowPwd1(false);
@@ -241,15 +243,35 @@ export default function Dashboard({
 
     const submitReset = (e) => {
         e.preventDefault();
+        
+        if (!pwdData.password || !pwdData.password_confirmation) {
+            alert(lang === 'ar' ? 'يرجى ملء جميع الحقول' : 'Please fill all fields');
+            return;
+        }
+
         if (pwdData.password !== pwdData.password_confirmation) {
             alert(t.passwordMismatch);
             return;
         }
+
+        // Use postPwd (useForm) so errors are automatically populated in pwdErrors
         postPwd(route('admin.reset-password'), {
+            preserveState: true,
+            preserveScroll: true,
             onSuccess: () => {
                 setResetModal({ open: false, teacher: null });
                 pwdReset();
-                alert(t.passwordResetSuccess);
+                
+                setConfirmModal({
+                    isOpen: true,
+                    type: 'success',
+                    title: t.done,
+                    message: t.passwordResetSuccess,
+                    onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
+                });
+            },
+            onError: (err) => {
+                console.error("Password reset error:", err);
             }
         });
     };
@@ -343,6 +365,27 @@ export default function Dashboard({
             fetchStudents();
         }
     }, [tab, studentFilters, fetchStudents]);
+
+    useEffect(() => {
+        if (flash.success === 'teacher_password_reset') {
+            setConfirmModal({
+                isOpen: true,
+                type: 'success',
+                title: t.done,
+                message: t.passwordResetSuccess,
+                onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
+            });
+        }
+        if (flash.success === 'admin_password_reset') {
+            setConfirmModal({
+                isOpen: true,
+                type: 'success',
+                title: t.done,
+                message: t.adminPasswordResetSuccess,
+                onConfirm: () => setConfirmModal(f => ({ ...f, isOpen: false })),
+            });
+        }
+    }, [flash.success]);
 
     const handleArchiveStudent = (id) => {
         setConfirmModal({
@@ -1278,6 +1321,7 @@ export default function Dashboard({
                                     onChange={e => setPwdData('password', e.target.value)}
                                     required
                                 />
+                                {pwdErrors.password && <div className="text-rose-500 text-xs mt-1 font-black">{pwdErrors.password}</div>}
                             </div>
                             <div className="f-field mb-8">
                                 <label className="f-label">{t.confirmPassword}</label>
@@ -1288,6 +1332,7 @@ export default function Dashboard({
                                     onChange={e => setPwdData('password_confirmation', e.target.value)}
                                     required
                                 />
+                                {pwdErrors.password_confirmation && <div className="text-rose-500 text-xs mt-1 font-black">{pwdErrors.password_confirmation}</div>}
                             </div>
 
                             <div className="flex gap-4">
