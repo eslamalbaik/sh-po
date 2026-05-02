@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
-// @ts-ignore
 import SearchableSelect from './SearchableSelect';
 
 interface Staff {
@@ -96,7 +95,7 @@ export default function TransferAssignmentModal({
                                 label: lang === 'ar' ? teacher.name_ar : (teacher.name_en || teacher.name_ar)
                             }))}
                             value={targetStaffId}
-                            onChange={setTargetStaffId}
+                            onChange={(val: string | number) => setTargetStaffId(val as string)}
                             placeholder={t.select}
                             lang={lang}
                         />

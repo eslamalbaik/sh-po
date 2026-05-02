@@ -1,15 +1,29 @@
 import React, { useState, Fragment } from 'react';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption, Transition } from '@headlessui/react';
 
+interface Option {
+    id: string | number;
+    label: string;
+}
+
+interface Props {
+    options?: Option[];
+    value: string | number;
+    onChange: (id: string | number) => void;
+    placeholder?: string;
+    lang?: string;
+    noResultsText?: string;
+    className?: string;
+}
+
 export default function SearchableSelect({ 
     options = [], 
     value, 
     onChange, 
     placeholder = "Select...", 
-    lang = 'ar',
     noResultsText = "No results found",
     className = ""
-}) {
+}: Props) {
     const [query, setQuery] = useState('');
 
     const filteredOptions = query === ''
@@ -23,11 +37,12 @@ export default function SearchableSelect({
 
     return (
         <div className={`relative w-full ${className}`}>
-            <Combobox value={selectedOption} onChange={(val) => onChange(val ? val.id : '')}>
+            <Combobox value={selectedOption} onChange={(val: Option | null) => onChange(val ? val.id : '')}>
                 <div className="relative w-full cursor-default overflow-hidden rounded-xl bg-white text-right sm:text-sm border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200 transition-all shadow-sm">
                     <ComboboxInput
                         className="w-full border-none py-3 pr-10 pl-3 text-sm leading-5 text-slate-900 focus:ring-0 font-bold outline-none"
-                        displayValue={(option) => option ? option.label : ''}
+                        // @ts-ignore
+                        displayValue={(option: Option) => option ? option.label : ''}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder={placeholder}
                     />

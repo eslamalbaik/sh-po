@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, router } from '@inertiajs/react';
 import axios from 'axios';
-// @ts-ignore
 import SearchableSelect from './SearchableSelect';
 
 interface Props {
@@ -180,7 +179,7 @@ export default function AddGroupModal({ isOpen, onClose, grades, subjects, teach
                                     label: lang === 'ar' ? staff.name_ar : (staff.name_en || staff.name_ar)
                                 }))}
                                 value={data.staff_id}
-                                onChange={val => setData('staff_id', val)}
+                                onChange={(val: string | number) => setData('staff_id', val as string)}
                                 placeholder={t.selectTeacher}
                                 lang={lang}
                             />
