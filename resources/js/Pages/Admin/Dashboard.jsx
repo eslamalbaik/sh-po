@@ -15,6 +15,7 @@ const ActionConfirmModal = React.lazy(() => import('@/Components/ActionConfirmMo
 export default function Dashboard({
     stats = {},
     reports = [],
+    all_reports = [],
     all_grades = [],
     all_sections = [],
     students_list = [],
@@ -302,7 +303,8 @@ export default function Dashboard({
         router.get(route('logout'));
     };
 
-    const filteredReports = (reports.data || []).filter(r => {
+    const reportSource = filterSubject !== 'all' ? all_reports : (reports.data || []);
+    const filteredReports = reportSource.filter(r => {
         const matchesSearch = r.name_ar.includes(search) || (r.name_en && r.name_en.toLowerCase().includes(search.toLowerCase()));
         if (!matchesSearch) return false;
         
@@ -815,7 +817,7 @@ export default function Dashboard({
                         </div>
 
                         {/* Teachers Pagination */}
-                        {reports.last_page > 1 && (
+                        {filterSubject === 'all' && reports.last_page > 1 && (
                             <div className="flex justify-center items-center gap-3 mt-10 mb-6 p-4 bg-white/40 backdrop-blur-sm rounded-2xl border border-white/20 shadow-sm">
                                 <Link 
                                     href={reports.prev_page_url || '#'} 

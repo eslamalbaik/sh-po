@@ -20,6 +20,64 @@ use Illuminate\Support\Str;
 
 class AdminPortalController extends Controller
 {
+    private function formatTeacherReportItem($staff)
+    {
+        return [
+            'id'            => $staff->id,
+            'user_id'       => $staff->user_id,
+            'name_ar'       => $staff->name_ar,
+            'name_en'       => $staff->name_en,
+            'is_staff'      => $staff->staff_no,
+            'completion'    => $this->getStaffPerformance($staff->id),
+            'assignments'   => (function() use ($staff) {
+                $all = collect();
+                foreach ($staff->assignments as $a) {
+                    $actualCount = \App\Models\Assessment::where([
+                        'staff_id'   => $staff->id,
+                        'section_id' => $a->section_id,
+                        'subject_id' => $a->subject_id
+                    ])->has('studentGrades')->count();
+                    
+                    $expected = $a->expected_assessments ?? 5;
+                    $pct = $expected > 0 ? min(round(($actualCount / $expected) * 100), 100) : 0;
+
+                    $all->push([
+                        'section_id' => $a->section_id,
+                        'subject_id' => $a->subject_id,
+                        'section_name' => $a->section->label_ar ?? (($a->section->grade->number ?? '') . ($a->section->letter ?? '')),
+                        'label' => ($a->subject->name_ar ?? ''),
+                        'label_ar' => ($a->subject->name_ar ?? ''),
+                        'label_en' => ($a->subject->name_en ?? $a->subject->name_ar ?? ''),
+                        'completion_ratio' => "{$actualCount}/{$expected}",
+                        'completion_pct' => "({$pct}%)",
+                        'has_data' => $actualCount > 0
+                    ]);
+                }
+                foreach ($staff->groups as $g) {
+                    $actualCount = \App\Models\Assessment::where('group_id', $g->id)
+                        ->has('studentGrades')
+                        ->count();
+                    $expected = 5;
+                    $pct = $expected > 0 ? min(round(($actualCount / $expected) * 100), 100) : 0;
+                    $all->push([
+                        'group_id' => $g->id,
+                        'type' => 'group',
+                        'section_id' => null,
+                        'subject_id' => $g->subject_id,
+                        'section_name' => $g->name_ar . ' (مجموعة)',
+                        'label' => ($g->subject->name_ar ?? ''),
+                        'label_ar' => ($g->subject->name_ar ?? ''),
+                        'label_en' => ($g->subject->name_en ?? $g->subject->name_ar ?? ''),
+                        'completion_ratio' => "{$actualCount}/{$expected}",
+                        'completion_pct' => "({$pct}%)",
+                        'has_data' => $actualCount > 0
+                    ]);
+                }
+                return $all;
+            })()
+        ];
+    }
+
     public function dashboard()
     {
         // 1. إحصائيات سريعة (KPIs)
@@ -40,65 +98,22 @@ class AdminPortalController extends Controller
             ->paginate(12); // 12 معلمين في الصفحة
 
         $teachers_report->getCollection()->transform(function($staff) {
-            return [
-                'id'            => $staff->id,
-                'user_id'       => $staff->user_id,
-                'name_ar'       => $staff->name_ar,
-                'name_en'       => $staff->name_en,
-                'is_staff'      => $staff->staff_no,
-                'completion'    => $this->getStaffPerformance($staff->id),
-                'assignments'   => (function() use ($staff) {
-                    $all = collect();
-                    foreach ($staff->assignments as $a) {
-                        $actualCount = \App\Models\Assessment::where([
-                            'staff_id'   => $staff->id,
-                            'section_id' => $a->section_id,
-                            'subject_id' => $a->subject_id
-                        ])->has('studentGrades')->count();
-                        
-                        $expected = $a->expected_assessments ?? 5;
-                        $pct = $expected > 0 ? min(round(($actualCount / $expected) * 100), 100) : 0;
-
-                        $all->push([
-                            'section_id' => $a->section_id,
-                            'subject_id' => $a->subject_id,
-                            'section_name' => $a->section->label_ar ?? (($a->section->grade->number ?? '') . ($a->section->letter ?? '')),
-                            'label' => ($a->subject->name_ar ?? ''),
-                            'label_ar' => ($a->subject->name_ar ?? ''),
-                            'label_en' => ($a->subject->name_en ?? $a->subject->name_ar ?? ''),
-                            'completion_ratio' => "{$actualCount}/{$expected}",
-                            'completion_pct' => "({$pct}%)",
-                            'has_data' => $actualCount > 0
-                        ]);
-                    }
-                    foreach ($staff->groups as $g) {
-                        $actualCount = \App\Models\Assessment::where('group_id', $g->id)
-                            ->has('studentGrades')
-                            ->count();
-                        $expected = 5;
-                        $pct = $expected > 0 ? min(round(($actualCount / $expected) * 100), 100) : 0;
-                        $all->push([
-                            'group_id' => $g->id,
-                            'type' => 'group',
-                            'section_id' => null,
-                            'subject_id' => $g->subject_id,
-                            'section_name' => $g->name_ar . ' (مجموعة)',
-                            'label' => ($g->subject->name_ar ?? ''),
-                            'label_ar' => ($g->subject->name_ar ?? ''),
-                            'label_en' => ($g->subject->name_en ?? $g->subject->name_ar ?? ''),
-                            'completion_ratio' => "{$actualCount}/{$expected}",
-                            'completion_pct' => "({$pct}%)",
-                            'has_data' => $actualCount > 0
-                        ]);
-                    }
-                    return $all;
-                })()
-            ];
+            return $this->formatTeacherReportItem($staff);
         });
+
+        $allTeachersReport = Staff::with([
+            'assignments' => function($q) {
+                $q->where('status', 'active')->with(['section.grade', 'subject']);
+            },
+            'groups.subject'
+        ])->get()->map(function($staff) {
+            return $this->formatTeacherReportItem($staff);
+        })->values();
 
         return Inertia::render('Admin/Dashboard', [
             'stats'        => $stats,
             'reports'      => $teachers_report,
+            'all_reports'  => $allTeachersReport,
             'all_teachers_list' => Staff::select('id', 'name_ar', 'name_en')->get(),
             'all_grades'   => Grade::orderBy('number')->get(),
             'all_sections' => Section::all(),
