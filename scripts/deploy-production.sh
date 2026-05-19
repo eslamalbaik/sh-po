@@ -30,7 +30,7 @@ fi
 
 echo "==> Maintenance mode"
 php artisan down --secret="$MAINTENANCE_SECRET"
-echo "    Bypass URL: ${APP_URL:-https://your-domain}/${MAINTENANCE_SECRET}"
+echo "    Bypass URL: ${APP_URL:-https://mzschool-results.com}/${MAINTENANCE_SECRET}"
 
 echo "==> Git pull"
 git fetch origin
