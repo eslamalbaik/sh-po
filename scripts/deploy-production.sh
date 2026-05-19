@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # نشر ميزة كلمات مرور بوابة ولي الأمر — تشغيل على السيرفر عبر SSH
 # الاستخدام: ./scripts/deploy-production.sh
-# يتطلب: mysqldump, composer, php, npm (أو public/build مرفوع مسبقاً من Git)
+# يتطلب: mysqldump, composer, php. اختياري: npm (فقط إن لم يكن public/build في Git)
 
 set -euo pipefail
 
@@ -42,17 +42,26 @@ if ! grep -q '^PARENT_PASSWORD_BCRYPT_ROUNDS=' .env 2>/dev/null; then
 fi
 
 echo "==> Composer"
-composer install --no-dev --optimize-autoloader
+if [[ "$(id -u)" -eq 0 ]]; then
+  export COMPOSER_ALLOW_SUPERUSER=1
+fi
+composer install --no-dev --optimize-autoloader --no-interaction
 
 echo "==> Migrate (new migrations only)"
 php artisan migrate --force
 
-if command -v npm &>/dev/null && [[ -f package.json ]]; then
-  echo "==> NPM build"
-  npm ci
+# الأصول مرفوعة في Git (public/build). تجنّب npm على السيرفر إلا عند الحاجة.
+# ضع SKIP_NPM=1 لتخطي npm حتى لو لم يكن manifest موجوداً.
+if [[ "${SKIP_NPM:-0}" == "1" ]]; then
+  echo "==> Skip npm (SKIP_NPM=1)"
+elif [[ -f public/build/manifest.json ]]; then
+  echo "==> Skip npm (public/build/manifest.json present from Git)"
+elif command -v npm &>/dev/null && [[ -f package.json ]]; then
+  echo "==> NPM build (no prebuilt assets in repo)"
+  npm ci --legacy-peer-deps
   npm run build
 else
-  echo "==> Skip npm (ensure public/build exists)"
+  echo "==> Skip npm (npm not installed; add public/build via Git or install Node)"
 fi
 
 echo "==> Cache"
