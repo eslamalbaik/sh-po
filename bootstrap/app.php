@@ -21,5 +21,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response) {
+            if ($response->getStatusCode() === 419) {
+                return back()->with([
+                    'message' => 'انتهت صلاحية الصفحة. حدّث الصفحة وحاول مرة أخرى.',
+                ]);
+            }
+
+            return $response;
+        });
     })->create();
