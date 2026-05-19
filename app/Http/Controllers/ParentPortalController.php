@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Assessment;
-use App\Models\StudentResultView;
+use App\Services\ParentPasswordService;
+use App\Services\ParentPortalViewLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -21,27 +23,26 @@ class ParentPortalController extends Controller
     }
 
     /**
-     * عملية تسجيل الدخول لولي الأمر (تعتمد على رقم الطالب ورقم الهوية)
+     * عملية تسجيل الدخول لولي الأمر (تعتمد على رقم الطالب وكلمة المرور المُولَّدة).
      */
     public function login(Request $request)
     {
         $request->validate([
             'student_no' => 'required|string',
-            'id_no'      => 'required|string',
+            'password'   => 'required|string',
         ]);
 
-        $id_no = str_replace('-', '', $request->id_no);
+        $student = Student::where('student_no', $request->student_no)->first();
 
-        $student = Student::where('student_no', $request->student_no)
-            ->whereRaw("REPLACE(student_id_no, '-', '') = ?", [$id_no])
-            ->first();
-
-        if (!$student) {
-            return back()->withErrors(['login' => 'بيانات الدخول غير صحيحة. يرجى التأكد من رقم الطالب ورقم الهوية والمحاولة مرة أخرى.']);
+        if (!$student || !ParentPasswordService::verify($student, $request->password)) {
+            return back()->withErrors([
+                'login' => 'بيانات الدخول غير صحيحة. يرجى التأكد من رقم الطالب وكلمة المرور.',
+            ]);
         }
 
-        // تخزين رقم الطالب في الجلسة (نفس منطق Supabase السابق الذي يعتمد على localStorage في المتصفح)
         session(['parent_student_id' => $student->id]);
+
+        ParentPortalViewLogger::log($student->id, 'parent', 'login', $request);
 
         return redirect()->route('parent.results');
     }
@@ -58,7 +59,9 @@ class ParentPortalController extends Controller
         }
 
         $student = Student::with(['grade', 'section'])->findOrFail($studentId);
-        
+
+        ParentPortalViewLogger::log($student->id, 'parent', 'view_results');
+
         // 1. جلب كافة التقييمات المنشورة للشعبة أو المجموعات
         $assessments = Assessment::where(function($q) use ($student) {
                 $q->where('section_id', $student->section_id)
@@ -150,7 +153,10 @@ class ParentPortalController extends Controller
         }
 
         $student = Student::with(['grade', 'section'])->findOrFail($studentId);
-        
+
+        $viewerType = Auth::check() ? 'admin' : 'parent';
+        ParentPortalViewLogger::log($student->id, $viewerType, 'view_results', $request);
+
         $assessments = Assessment::where(function($q) use ($student) {
                 $q->where('section_id', $student->section_id)
                   ->orWhereIn('group_id', $student->groups()->pluck('groups.id'));
@@ -168,7 +174,7 @@ class ParentPortalController extends Controller
             $grade = StudentGrade::where('assessment_id', $a->id)
                 ->where('student_id', $studentId)
                 ->first();
-            
+
             $currentAssignment = \App\Models\TeacherAssignment::where([
                 'section_id' => $student->section_id,
                 'subject_id' => $a->subject_id,

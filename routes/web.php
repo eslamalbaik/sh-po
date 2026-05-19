@@ -54,6 +54,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/admin/students/{id}/transfer', [AdminPortalController::class, 'transferStudent'])->name('admin.students.transfer');
         Route::post('/admin/students/{id}/archive', [AdminPortalController::class, 'archiveStudent'])->name('admin.students.archive');
         Route::get('/admin/student/{id}/results', [AdminPortalController::class, 'viewStudentResults'])->name('admin.student-results');
+
+        // Parent Portal Passwords (Bulk Generation + Print + Distribute)
+        Route::post('/admin/parent-passwords/bulk-generate-chunk', [AdminPortalController::class, 'bulkGenerateParentPasswordsChunk'])->name('admin.parent-passwords.bulk-generate-chunk');
+        Route::get('/admin/parent-passwords/print', [AdminPortalController::class, 'showParentPasswordsPrint'])->name('admin.parent-passwords.print');
+        Route::post('/admin/parent-passwords/mark-distributed', [AdminPortalController::class, 'markParentPasswordsDistributed'])->name('admin.parent-passwords.mark-distributed');
+        Route::post('/admin/parent-passwords/{studentId}/reset', [AdminPortalController::class, 'resetParentPassword'])->name('admin.parent-passwords.reset');
         Route::get('/api/admin/students', [AdminPortalController::class, 'getStudentsAjax'])->name('api.admin.students');
 
         // Assignment Management

@@ -8,7 +8,7 @@ export default function Login() {
 
     const { data, setData, post, processing, errors } = useForm({
         student_no: '',
-        id_no: '',
+        password: '',
     });
 
     const isAr = lang === 'ar';
@@ -18,7 +18,7 @@ export default function Login() {
         year: isAr ? 'العام الدراسي 2025/2026 — الفصل الدراسي الثالث' : 'Academic Year 2025/2026 — Third Semester',
         portal: isAr ? '🎓 بوابة أولياء الأمور' : '🎓 Parent Portal',
         student_no: isAr ? 'رقم الطالب' : 'Student Number',
-        id_no: isAr ? 'رقم هوية الطالب' : 'Student ID Number',
+        password: isAr ? 'كلمة المرور' : 'Password',
         login: isAr ? 'دخول' : 'Sign In',
         secure: isAr ? 'اتصال آمن ومشفّر' : 'Secure encrypted connection',
     };
@@ -67,13 +67,14 @@ export default function Login() {
                             </div>
 
                             <div className="field">
-                                <label>{labels.id_no}</label>
+                                <label>{labels.password}</label>
                                 <div style={{ position: 'relative' }}>
-                                    <input 
+                                    <input
                                         type={showPw ? "text" : "password"}
-                                        value={data.id_no}
-                                        onChange={e => setData('id_no', e.target.value)}
+                                        value={data.password}
+                                        onChange={e => setData('password', e.target.value)}
                                         placeholder="••••••••"
+                                        autoComplete="current-password"
                                         style={{ paddingRight: isAr ? '14px' : '40px', paddingLeft: isAr ? '40px' : '14px' }}
                                     />
                                     <button 

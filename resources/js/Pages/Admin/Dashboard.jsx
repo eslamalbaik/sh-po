@@ -5,6 +5,10 @@ import DebouncedSearchInput from '@/Components/DebouncedSearchInput';
 import SearchableSelect from '@/Components/SearchableSelect';
 import axios from 'axios';
 
+/** ثابتة: تتجاوز Ziggy إن كان route:cache قديماً بدون هذه المسارات */
+const PARENT_PW_CHUNK_URL = '/admin/parent-passwords/bulk-generate-chunk';
+const PARENT_PW_PRINT_URL = '/admin/parent-passwords/print';
+
 const AddStudentModal = React.lazy(() => import('@/Components/AddStudentModal'));
 const AddStaffModal = React.lazy(() => import('@/Components/AddStaffModal'));
 const AddSubjectModal = React.lazy(() => import('@/Components/AddSubjectModal'));
@@ -22,6 +26,9 @@ export default function Dashboard({
     all_subjects = [],
     all_groups = [],
     all_teachers_list = [],
+    parent_portal_stats = {},
+    parent_portal_views = [],
+    parent_credentials_stats = {},
     flash = {}
 }) {
     const [tab, setTab] = useState('teachers');
@@ -54,6 +61,45 @@ export default function Dashboard({
             students: "الطلاب",
             assignments: "التكليفات",
             groups: "المجموعات",
+            parentPortal: "بوابة ولي الأمر",
+            parentPortalTitle: "متابعة زيارات بوابة ولي الأمر",
+            parentPortalSub: "سجل دخول أولياء الأمور واطلاعهم على درجات أبنائهم",
+            visitsToday: "زيارات اليوم",
+            visitsWeek: "زيارات الأسبوع",
+            uniqueStudentsWeek: "طلاب اطلع عليهم ولي أمر (أسبوع)",
+            loginsToday: "تسجيلات دخول اليوم",
+            lastVisits: "آخر الزيارات",
+            viewerType: "الزائر",
+            action: "الإجراء",
+            dateTime: "التاريخ والوقت",
+            parentViewer: "ولي أمر",
+            adminViewer: "إدارة",
+            actionLogin: "تسجيل دخول",
+            actionViewResults: "اطلاع على الدرجات",
+            noVisits: "لا توجد زيارات مسجلة بعد",
+            lastParentView: "آخر اطلاع ولي أمر",
+            neverViewed: "لم يُطلع بعد",
+            viewCount: "مرات الاطلاع",
+            credentialsTitle: "بطاقات دخول أولياء الأمور",
+            credentialsSub: "توليد كلمات مرور عشوائية وطباعتها كملف PDF لتوزيعها",
+            withoutPassword: "بدون كلمة مرور",
+            pendingPrint: "بانتظار الطباعة",
+            distributedCount: "وُزِّعت",
+            totalActive: "إجمالي الطلاب النشطين",
+            bulkGenerate: "⚡ توليد كلمات مرور لجميع الطلاب",
+            openPrintAgain: "↻ فتح صفحة الطباعة مجدداً",
+            allDistributed: "✓ تم توليد كلمات المرور لجميع الطلاب وتوزيعها",
+            confirmBulkTitle: "تأكيد توليد كلمات المرور",
+            confirmBulkMsg: "سيتم توليد كلمات مرور جديدة لـ {count} طالب. اكتب «توليد» للمتابعة:",
+            confirmBulkType: "توليد",
+            generate: "توليد وطباعة",
+            generating: "جاري التوليد...",
+            progressTitle: "جاري توليد كلمات المرور",
+            progressDone: "تم {done} من {total}",
+            progressPercent: "% مكتمل",
+            progressDontClose: "⚠ لا تغلق هذه النافذة حتى انتهاء العملية",
+            progressFinished: "✓ اكتمل التوليد. جاري الانتقال إلى صفحة الطباعة...",
+            generateError: "حدث خطأ أثناء التوليد. سيتم المحاولة مرة أخرى.",
             changePass: "تغيير كلمة المرور الخاصة بك",
             logout: "خروج",
             studentsCount: "طالب مسجل",
@@ -126,6 +172,45 @@ export default function Dashboard({
             students: "Students",
             assignments: "Assignments",
             groups: "Groups",
+            parentPortal: "Parent Portal",
+            parentPortalTitle: "Parent Portal Visit Tracking",
+            parentPortalSub: "Log of parent logins and grade views",
+            visitsToday: "Visits Today",
+            visitsWeek: "Visits This Week",
+            uniqueStudentsWeek: "Students Viewed by Parent (Week)",
+            loginsToday: "Logins Today",
+            lastVisits: "Recent Visits",
+            viewerType: "Visitor",
+            action: "Action",
+            dateTime: "Date & Time",
+            parentViewer: "Parent",
+            adminViewer: "Admin",
+            actionLogin: "Login",
+            actionViewResults: "Viewed Grades",
+            noVisits: "No visits recorded yet",
+            lastParentView: "Last Parent View",
+            neverViewed: "Not viewed yet",
+            viewCount: "View count",
+            credentialsTitle: "Parent Portal Credentials",
+            credentialsSub: "Generate random passwords and print A4 PDF cards",
+            withoutPassword: "Without Password",
+            pendingPrint: "Pending Print",
+            distributedCount: "Distributed",
+            totalActive: "Total Active Students",
+            bulkGenerate: "⚡ Generate Passwords for All Students",
+            openPrintAgain: "↻ Open Print Page Again",
+            allDistributed: "✓ All students have passwords generated and distributed",
+            confirmBulkTitle: "Confirm Bulk Generation",
+            confirmBulkMsg: "Will generate new passwords for {count} students. Type \"generate\" to continue:",
+            confirmBulkType: "generate",
+            generate: "Generate & Print",
+            generating: "Generating...",
+            progressTitle: "Generating Passwords",
+            progressDone: "{done} of {total} done",
+            progressPercent: "% complete",
+            progressDontClose: "⚠ Do not close this window until finished",
+            progressFinished: "✓ Generation complete. Redirecting to print page...",
+            generateError: "Error during generation. Retrying...",
             changePass: "Change your password",
             logout: "Logout",
             studentsCount: "Registered Students",
@@ -194,6 +279,95 @@ export default function Dashboard({
     };
 
     const t = dict[lang];
+
+    const formatDateTime = (iso) => {
+        if (!iso) return '—';
+        try {
+            return new Date(iso).toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-US', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+            });
+        } catch {
+            return iso;
+        }
+    };
+
+    const actionLabel = (action) => {
+        if (action === 'login') return t.actionLogin;
+        if (action === 'view_results') return t.actionViewResults;
+        return action;
+    };
+
+    // Bulk parent credentials state
+    const [bulkProgress, setBulkProgress] = useState({
+        open: false,
+        running: false,
+        done: 0,
+        total: 0,
+        finished: false,
+        error: null,
+    });
+
+    const startBulkGenerate = async () => {
+        const total = parent_credentials_stats.without_hash ?? 0;
+        if (total <= 0) {
+            window.alert(lang === 'ar'
+                ? 'كل الطلاب لديهم كلمات مرور بالفعل.'
+                : 'All students already have passwords.');
+            return;
+        }
+
+        const confirmMsg = lang === 'ar'
+            ? `سيتم توليد كلمات مرور جديدة لـ ${total} طالب.\nهل أنت متأكد من المتابعة؟`
+            : `Will generate new passwords for ${total} students.\nAre you sure?`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        setBulkProgress({ open: true, running: true, done: 0, total, finished: false, error: null });
+
+        const CHUNK_SIZE = 120;
+        let done = 0;
+        let safety = Math.ceil(total / CHUNK_SIZE) + 5;
+
+        try {
+            while (done < total && safety-- > 0) {
+                const resp = await axios.post(PARENT_PW_CHUNK_URL, {
+                    limit: CHUNK_SIZE,
+                });
+
+                const processed = Number(resp?.data?.processed ?? 0);
+                if (processed <= 0) break;
+
+                done += processed;
+                setBulkProgress((p) => ({ ...p, done: Math.min(done, total) }));
+            }
+
+            setBulkProgress((p) => ({ ...p, done: total, finished: true, running: false }));
+
+            setTimeout(() => {
+                window.location.href = PARENT_PW_PRINT_URL;
+            }, 800);
+        } catch (err) {
+            console.error('bulk-generate failed:', err);
+            const status = err?.response?.status;
+            const serverMsg = err?.response?.data?.message;
+            let msg = t.generateError;
+            if (status === 419) {
+                msg = lang === 'ar'
+                    ? 'انتهت صلاحية الجلسة (CSRF). حدّث الصفحة ثم أعد المحاولة.'
+                    : 'Session expired (CSRF). Refresh and try again.';
+            } else if (status === 401 || status === 403) {
+                msg = lang === 'ar'
+                    ? 'لا تملك صلاحية لهذه العملية. سجّل الدخول كأدمن.'
+                    : 'Not authorized. Please log in as admin.';
+            } else if (serverMsg && typeof serverMsg === 'string') {
+                msg = serverMsg;
+            } else if (err?.message) {
+                msg = `${msg} (${err.message})`;
+            }
+            setBulkProgress((p) => ({ ...p, error: msg, running: false }));
+        }
+    };
 
     // Assignments State
     const [selectedStaff, setSelectedStaff] = useState('');
@@ -600,6 +774,10 @@ export default function Dashboard({
                         onClick={() => setTab('groups')} 
                         className={`leg-tab-btn ${tab === 'groups' ? 'active' : ''}`}
                     >{t.groups}</button>
+                    <button 
+                        onClick={() => setTab('parent-portal')} 
+                        className={`leg-tab-btn ${tab === 'parent-portal' ? 'active' : ''}`}
+                    >{t.parentPortal}</button>
                     
                     <button 
                         className="leg-icon-btn" 
@@ -915,12 +1093,13 @@ export default function Dashboard({
                                         <th className="p-5 text-slate-700 font-extrabold text-sm w-[90px]">{t.grade}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm min-w-[120px] whitespace-nowrap">{t.section}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm">{t.academicPerformance}</th>
+                                        <th className="p-5 text-slate-700 font-extrabold text-sm min-w-[140px]">{t.lastParentView}</th>
                                         <th className="p-5 text-slate-700 font-extrabold text-sm text-center">{t.actions}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {studentLoading ? (
-                                        <tr><td colSpan={7} className="p-20 text-center text-slate-400">
+                                        <tr><td colSpan={8} className="p-20 text-center text-slate-400">
                                             <div className="loading-spinner mb-2"></div>
                                             {t.fetchData}
                                         </td></tr>
@@ -946,6 +1125,18 @@ export default function Dashboard({
                                                     </div>
                                                     <span className={`text-xs font-black ${std.performance >= 60 ? 'text-emerald-600' : 'text-rose-600'}`}>%{std.performance}</span>
                                                 </div>
+                                            </td>
+                                            <td className="p-5">
+                                                {std.last_parent_view_at ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="text-xs font-bold text-emerald-700">{formatDateTime(std.last_parent_view_at)}</span>
+                                                        {(std.parent_views_count > 0) && (
+                                                            <span className="text-[10px] text-slate-400 font-bold">{t.viewCount}: {std.parent_views_count}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-300">{t.neverViewed}</span>
+                                                )}
                                             </td>
                                             <td className="p-5">
                                                 <div className="flex justify-center gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -981,7 +1172,7 @@ export default function Dashboard({
                                             </td>
                                         </tr>
                                     )) : (
-                                        <tr><td colSpan={7} className="p-20 text-center">
+                                        <tr><td colSpan={8} className="p-20 text-center">
                                             <div className="text-slate-200 text-6xl mb-4">🔍</div>
                                             <div className="text-slate-400 font-bold text-lg">{lang === 'ar' ? "لا يوجد طلاب مطابقين لمعايير البحث" : "No students matching search criteria"}</div>
                                         </td></tr>
@@ -1299,7 +1490,201 @@ export default function Dashboard({
                         </div>
                     </div>
                 )}
+
+                {tab === 'parent-portal' && (
+                    <div className="parent-portal-tab w-full" style={{ animation: 'fadeUp 0.4s ease-out' }}>
+                        <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl border border-slate-200">
+                            <div>
+                                <h2 className="text-2xl font-black text-slate-800">👨‍👩‍👧 {t.parentPortalTitle}</h2>
+                                <p className="text-slate-400 text-sm">{t.parentPortalSub}</p>
+                            </div>
+                        </div>
+
+                        {/* Bulk Credentials Card */}
+                        <div className="mb-8 bg-white rounded-2xl border border-slate-200 p-6">
+                            <div className="flex items-start justify-between gap-6 flex-wrap">
+                                <div className="flex-1 min-w-[280px]">
+                                    <h3 className="text-lg font-black text-slate-800 mb-1">🔐 {t.credentialsTitle}</h3>
+                                    <p className="text-slate-400 text-sm mb-4">{t.credentialsSub}</p>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                        <div className="bg-slate-50 rounded-xl p-3">
+                                            <div className="text-2xl font-black text-[#27374D]">{parent_credentials_stats.total_active ?? 0}</div>
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase">{t.totalActive}</div>
+                                        </div>
+                                        <div className="bg-rose-50 rounded-xl p-3">
+                                            <div className="text-2xl font-black text-rose-600">{parent_credentials_stats.without_hash ?? 0}</div>
+                                            <div className="text-[10px] font-bold text-rose-700 uppercase">{t.withoutPassword}</div>
+                                        </div>
+                                        <div className="bg-amber-50 rounded-xl p-3">
+                                            <div className="text-2xl font-black text-amber-600">{parent_credentials_stats.pending_print ?? 0}</div>
+                                            <div className="text-[10px] font-bold text-amber-700 uppercase">{t.pendingPrint}</div>
+                                        </div>
+                                        <div className="bg-emerald-50 rounded-xl p-3">
+                                            <div className="text-2xl font-black text-emerald-600">{parent_credentials_stats.distributed ?? 0}</div>
+                                            <div className="text-[10px] font-bold text-emerald-700 uppercase">{t.distributedCount}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-3 min-w-[240px]">
+                                    {parent_credentials_stats.show_bulk_button ? (
+                                        <button
+                                            type="button"
+                                            onClick={startBulkGenerate}
+                                            disabled={bulkProgress.running}
+                                            className="font-bold px-6 py-4 rounded-xl text-white shadow-lg transition-all disabled:opacity-50"
+                                            style={{ background: '#27374D' }}
+                                        >
+                                            {bulkProgress.running ? t.generating : t.bulkGenerate}
+                                        </button>
+                                    ) : (
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                                            <div className="text-emerald-700 font-black text-sm">{t.allDistributed}</div>
+                                        </div>
+                                    )}
+
+                                    {parent_credentials_stats.has_pending_temp && (
+                                        <a
+                                            href={PARENT_PW_PRINT_URL}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="font-bold px-6 py-3 rounded-xl border-2 border-amber-400 text-amber-700 text-center hover:bg-amber-50"
+                                        >
+                                            {t.openPrintAgain}
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                                <div className="text-3xl font-black text-[#27374D]">{parent_portal_stats.visits_today ?? 0}</div>
+                                <div className="text-xs font-bold text-slate-400 mt-1 uppercase">{t.visitsToday}</div>
+                            </div>
+                            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                                <div className="text-3xl font-black text-emerald-600">{parent_portal_stats.visits_week ?? 0}</div>
+                                <div className="text-xs font-bold text-slate-400 mt-1 uppercase">{t.visitsWeek}</div>
+                            </div>
+                            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                                <div className="text-3xl font-black text-indigo-600">{parent_portal_stats.unique_students_week ?? 0}</div>
+                                <div className="text-xs font-bold text-slate-400 mt-1 uppercase">{t.uniqueStudentsWeek}</div>
+                            </div>
+                            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                                <div className="text-3xl font-black text-amber-600">{parent_portal_stats.logins_today ?? 0}</div>
+                                <div className="text-xs font-bold text-slate-400 mt-1 uppercase">{t.loginsToday}</div>
+                            </div>
+                        </div>
+
+                        <div className="st-table-wrap bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                                <h3 className="font-black text-slate-700">{t.lastVisits}</h3>
+                            </div>
+                            <table className="st-table w-full text-right border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                                        <th className="p-4 text-slate-700 font-extrabold text-sm">{t.studentName}</th>
+                                        <th className="p-4 text-slate-700 font-extrabold text-sm">{t.studentNo}</th>
+                                        <th className="p-4 text-slate-700 font-extrabold text-sm">{t.grade}</th>
+                                        <th className="p-4 text-slate-700 font-extrabold text-sm">{t.viewerType}</th>
+                                        <th className="p-4 text-slate-700 font-extrabold text-sm">{t.action}</th>
+                                        <th className="p-4 text-slate-700 font-extrabold text-sm">{t.dateTime}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {parent_portal_views.length > 0 ? parent_portal_views.map((v) => (
+                                        <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50/80">
+                                            <td className="p-4 font-bold text-slate-800">
+                                                {lang === 'ar' ? v.student_name_ar : (v.student_name_en || v.student_name_ar)}
+                                            </td>
+                                            <td className="p-4 text-slate-500 font-mono text-sm">{v.student_no}</td>
+                                            <td className="p-4">
+                                                <span className="st-cell-badge blue">{v.grade_number}</span>
+                                                {v.section_letter && <span className="st-cell-badge purple mr-1">{v.section_letter}</span>}
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`st-cell-badge ${v.viewer_type === 'parent' ? 'blue' : 'purple'}`}>
+                                                    {v.viewer_type === 'parent'
+                                                        ? t.parentViewer
+                                                        : (v.viewer_name ? `${t.adminViewer} (${v.viewer_name})` : t.adminViewer)}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-sm font-bold text-slate-600">{actionLabel(v.action)}</td>
+                                            <td className="p-4 text-sm text-slate-500">{formatDateTime(v.created_at)}</td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={6} className="p-16 text-center text-slate-400 font-bold">
+                                                {t.noVisits}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {/* Bulk Parent Credentials Progress Modal */}
+            {bulkProgress.open && (
+                <div className="modal-overlay" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                    <div className="modal-container premium-modal max-w-[560px] w-[95%]">
+                        <div className="modal-header-blue" style={{ background: '#27374D' }}>
+                            {!bulkProgress.running && (
+                                <button className="close-btn" onClick={() => setBulkProgress((p) => ({ ...p, open: false }))}>×</button>
+                            )}
+                            <h3 className="modal-title">⏳ {t.progressTitle}</h3>
+                        </div>
+
+                        <div className="modal-body p-8">
+                            {(() => {
+                                const pct = bulkProgress.total > 0
+                                    ? Math.min(100, Math.round((bulkProgress.done / bulkProgress.total) * 100))
+                                    : 0;
+                                return (
+                                    <>
+                                        <div className="flex justify-between items-baseline mb-3">
+                                            <div className="font-black text-slate-700 text-lg">
+                                                {t.progressDone
+                                                    .replace('{done}', bulkProgress.done)
+                                                    .replace('{total}', bulkProgress.total)}
+                                            </div>
+                                            <div className="font-black text-3xl" style={{ color: '#27374D' }}>
+                                                {pct}<span className="text-base text-slate-400">{t.progressPercent}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="w-full h-5 bg-slate-100 rounded-full overflow-hidden shadow-inner mb-4">
+                                            <div
+                                                className="h-full transition-all duration-300 ease-out"
+                                                style={{
+                                                    width: `${pct}%`,
+                                                    background: bulkProgress.finished
+                                                        ? 'linear-gradient(90deg, #10b981, #059669)'
+                                                        : 'linear-gradient(90deg, #3b82f6, #27374D)',
+                                                }}
+                                            />
+                                        </div>
+
+                                        {bulkProgress.error ? (
+                                            <div className="text-rose-600 font-bold text-sm">{bulkProgress.error}</div>
+                                        ) : bulkProgress.finished ? (
+                                            <div className="text-emerald-700 font-bold text-sm flex items-center gap-2">
+                                                <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                                                {t.progressFinished}
+                                            </div>
+                                        ) : (
+                                            <div className="text-amber-700 font-bold text-xs">{t.progressDontClose}</div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Teacher Password Reset Modal */}
             {resetModal.open && resetModal.teacher && (

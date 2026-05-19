@@ -14,8 +14,21 @@ class Student extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id', 'student_no', 'student_id_no', 'name_ar', 'name_en', 
-        'grade_id', 'section_id', 'parent_user_id', 'parent_mobile', 'is_active'
+        'id', 'student_no', 'student_id_no', 'name_ar', 'name_en',
+        'grade_id', 'section_id', 'parent_user_id', 'parent_mobile', 'is_active',
+        'parent_password_hash', 'parent_password_plain_temp',
+        'parent_password_generated_at', 'parent_password_distributed_at',
+    ];
+
+    protected $hidden = [
+        'parent_password_hash',
+        'parent_password_plain_temp',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'parent_password_generated_at'   => 'datetime',
+        'parent_password_distributed_at' => 'datetime',
     ];
 
     protected $searchable = ['name_ar', 'name_en', 'student_no'];
@@ -35,4 +48,5 @@ class Student extends Model
     public function parent() { return $this->belongsTo(User::class, 'parent_user_id'); }
     public function grades() { return $this->hasMany(StudentGrade::class); }
     public function groups() { return $this->belongsToMany(Group::class, 'group_students'); }
+    public function parentPortalViews() { return $this->hasMany(ParentPortalView::class); }
 }

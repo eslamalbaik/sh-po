@@ -9,7 +9,10 @@ use App\Models\StudentGrade;
 use App\Models\TeacherAssignment;
 use Illuminate\Http\Request;
 use App\Models\Group;
+use App\Models\ParentPortalView;
 use App\Models\Grade;
+use App\Services\ParentPasswordService;
+use App\Services\ParentPortalViewLogger;
 use App\Models\Section;
 use App\Models\Subject;
 use Illuminate\Support\Facades\DB;
@@ -122,7 +125,177 @@ class AdminPortalController extends Controller
             'students_list' => Student::where('is_active', true)
                 ->select('id', 'name_ar', 'student_no')
                 ->get(),
+            'parent_portal_stats' => $this->getParentPortalStats(),
+            'parent_portal_views' => $this->getRecentParentPortalViews(),
+            'parent_credentials_stats' => $this->getParentCredentialsStats(),
         ]);
+    }
+
+    private function getParentCredentialsStats(): array
+    {
+        $base = Student::where('is_active', true);
+
+        $total          = (clone $base)->count();
+        $withoutHash    = (clone $base)->whereNull('parent_password_hash')->count();
+        $pendingPrint   = (clone $base)->whereNotNull('parent_password_plain_temp')->count();
+        $distributed    = (clone $base)->whereNotNull('parent_password_distributed_at')->count();
+
+        return [
+            'total_active'    => $total,
+            'without_hash'    => $withoutHash,
+            'pending_print'   => $pendingPrint,
+            'distributed'     => $distributed,
+            'show_bulk_button' => $withoutHash > 0,
+            'has_pending_temp' => $pendingPrint > 0,
+        ];
+    }
+
+    /**
+     * توليد كلمات مرور لدفعة واحدة من الطلاب (chunked).
+     * يُستخدم لإظهار شريط تقدّم حقيقي على الواجهة.
+     */
+    public function bulkGenerateParentPasswordsChunk(Request $request)
+    {
+        $limit = (int) $request->input('limit', 50);
+        $limit = max(1, min(200, $limit));
+
+        $students = Student::where('is_active', true)
+            ->whereNull('parent_password_hash')
+            ->limit($limit)
+            ->get();
+
+        DB::transaction(function () use ($students) {
+            foreach ($students as $student) {
+                ParentPasswordService::assignTo($student);
+            }
+        });
+
+        $remaining = Student::where('is_active', true)
+            ->whereNull('parent_password_hash')
+            ->count();
+
+        return response()->json([
+            'processed' => $students->count(),
+            'remaining' => $remaining,
+        ]);
+    }
+
+    /**
+     * صفحة عرض البطاقات للطباعة (PDF عبر window.print).
+     * تعرض الطلاب الذين لديهم نص صريح مؤقت فقط (لم يُوزَّعوا بعد).
+     */
+    public function showParentPasswordsPrint()
+    {
+        $students = Student::where('is_active', true)
+            ->whereNotNull('parent_password_plain_temp')
+            ->with(['grade', 'section'])
+            ->orderBy('grade_id')
+            ->orderBy('section_id')
+            ->orderBy('name_ar')
+            ->get()
+            ->map(function (Student $s) {
+                return [
+                    'id'             => $s->id,
+                    'name_ar'        => $s->name_ar,
+                    'name_en'        => $s->name_en,
+                    'student_no'     => $s->student_no,
+                    'grade_number'   => $s->grade?->number,
+                    'section_letter' => $s->section?->letter,
+                    'section_label'  => $s->section?->label_ar,
+                    'password'       => $s->parent_password_plain_temp,
+                    'generated_at'   => $s->parent_password_generated_at?->toIso8601String(),
+                ];
+            });
+
+        return Inertia::render('Admin/ParentCredentialsPrint', [
+            'students'     => $students,
+            'generated_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * بعد التوزيع: مسح النص الصريح المؤقت لجميع الطلاب الذين لديهم كلمة مولّدة.
+     */
+    public function markParentPasswordsDistributed(Request $request)
+    {
+        $count = Student::where('is_active', true)
+            ->whereNotNull('parent_password_plain_temp')
+            ->update([
+                'parent_password_plain_temp'     => null,
+                'parent_password_distributed_at' => now(),
+            ]);
+
+        return redirect()->route('admin.dashboard')->with('flash', [
+            'message' => "تم تأكيد توزيع {$count} بطاقة. النصوص الصريحة لكلمات المرور مُسحت من قاعدة البيانات.",
+        ]);
+    }
+
+    /**
+     * إعادة تعيين كلمة مرور لطالب واحد (للحالات الفردية: نسيان...).
+     */
+    public function resetParentPassword(Request $request, $studentId)
+    {
+        $student = Student::findOrFail($studentId);
+        ParentPasswordService::assignTo($student);
+
+        return redirect()->route('admin.parent-passwords.print');
+    }
+
+    private function getParentPortalStats(): array
+    {
+        $parentQuery = ParentPortalView::where('viewer_type', 'parent');
+
+        return [
+            'visits_today' => (clone $parentQuery)->whereDate('created_at', today())->count(),
+            'visits_week' => (clone $parentQuery)->where('created_at', '>=', now()->subDays(7))->count(),
+            'unique_students_week' => (clone $parentQuery)
+                ->where('action', 'view_results')
+                ->where('created_at', '>=', now()->subDays(7))
+                ->distinct('student_id')
+                ->count('student_id'),
+            'logins_today' => (clone $parentQuery)
+                ->where('action', 'login')
+                ->whereDate('created_at', today())
+                ->count(),
+        ];
+    }
+
+    private function getRecentParentPortalViews(int $limit = 100)
+    {
+        return ParentPortalView::with([
+            'student.grade',
+            'student.section',
+            'viewerStaff',
+            'viewerUser',
+        ])
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->map(function (ParentPortalView $view) {
+                $student = $view->student;
+                $viewerName = null;
+
+                if ($view->viewer_type === 'admin') {
+                    $viewerName = $view->viewerStaff?->name_ar
+                        ?? $view->viewerUser?->name
+                        ?? 'مسؤول';
+                }
+
+                return [
+                    'id' => $view->id,
+                    'student_id' => $view->student_id,
+                    'student_name_ar' => $student?->name_ar,
+                    'student_name_en' => $student?->name_en,
+                    'student_no' => $student?->student_no,
+                    'grade_number' => $student?->grade?->number,
+                    'section_letter' => $student?->section?->letter,
+                    'viewer_type' => $view->viewer_type,
+                    'action' => $view->action,
+                    'viewer_name' => $viewerName,
+                    'ip_address' => $view->ip_address,
+                    'created_at' => $view->created_at?->toIso8601String(),
+                ];
+            });
     }
 
     private function getTotalPerformanceRate()
@@ -183,7 +356,17 @@ class AdminPortalController extends Controller
 
     public function getStudentsAjax(Request $request)
     {
-        $query = Student::with(['grade', 'section']);
+        $query = Student::with(['grade', 'section'])
+            ->withMax([
+                'parentPortalViews as last_parent_view_at' => function ($q) {
+                    $q->where('viewer_type', 'parent')->where('action', 'view_results');
+                },
+            ], 'created_at')
+            ->withCount([
+                'parentPortalViews as parent_views_count' => function ($q) {
+                    $q->where('viewer_type', 'parent')->where('action', 'view_results');
+                },
+            ]);
         
         if ($request->search) {
             $query->where(function($q) use ($request) {
@@ -275,13 +458,13 @@ class AdminPortalController extends Controller
             'name_ar' => 'required|string|max:255',
             'name_en' => 'required|string|max:255',
             'student_no' => 'required|string|unique:students,student_no',
-            'student_id_no' => 'required|string',
+            'student_id_no' => 'nullable|string',
             'grade_id' => 'required|exists:grades,id',
             'section_id' => 'required|exists:sections,id',
             'parent_mobile' => 'nullable|string',
         ]);
 
-        Student::create([
+        $student = Student::create([
             'id' => (string) Str::uuid(),
             'name_ar' => $request->name_ar,
             'name_en' => $request->name_en,
@@ -292,6 +475,8 @@ class AdminPortalController extends Controller
             'parent_mobile' => $request->parent_mobile,
             'is_active' => true,
         ]);
+
+        ParentPasswordService::assignTo($student);
 
         return back();
     }
@@ -823,6 +1008,8 @@ class AdminPortalController extends Controller
             })->values()->all();
 
         session(['parent_student_id' => $id]);
+
+        ParentPortalViewLogger::log($id, 'admin', 'view_results');
 
         return Inertia::render('Parent/Results', [
             'student' => $student,
